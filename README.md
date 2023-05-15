@@ -34,5 +34,5 @@ cargo build --release
 
 ```zsh
 
-cargo run -- -w zod --fake -p 9030
+cargo run -- -i zod --fake -p 9030
 ```
