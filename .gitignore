@@ -1,3 +1,8 @@
 /target
+
+# project specific files
 urbit
+!urbit/
+hol-urbit
 ships
+hol.pid

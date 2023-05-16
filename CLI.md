@@ -12,8 +12,8 @@ Usage: hol boot --fake -p 9030 zod
 
 Commands:
   boot        Boots a node with the identity provided.
-  nodes       List all running nodes
-  node        Attach to instances for logs, metrics, and running commands
+  network     Configure network topology & discovery mechanism
+  instance    Attach to instances for logs, metrics, and running commands
   version     Prints the current version
 ```
 
@@ -63,7 +63,7 @@ Commands:
   logs        Prints logs (--attach to connect to stdout)
   command     Run a command against the instance.
   upgrade     Checks for updates and applies them
-  apps        Returns a list of all apps (agents) running with all metadata
+  apps        Returns a list of all apps (agents) running with all metadata (docket)
   app         A subcommand for managing apps
 ```
 
