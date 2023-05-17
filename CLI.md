@@ -18,35 +18,6 @@ Commands:
   version     Prints the current version
 ```
 
-### `boot` command
-
-```text
-> hol boot
-
-Usage: hol boot [OPTIONS] zod
-
-Options:
-  -F, --fake        Boots a fake ship
-  -p, --urbit-port  http-port for Urbit instance
-  -P, --node-port   wrapper node port (proxies to urbit-port)
-  -G, --key         urbit id keyfile in string form
-```
-
-### `nodes` command
-
-```text
-> hol nodes
-+----------------+----------+----------+----------+----------+
-| server-id      | status   | pid      | type     | port     |
-+----------------+----------+----------+----------+----------+ 
-| lomder-librun  | running  | 42561    | live     | 3030     |
-+----------------+----------+----------+----------+----------+
-| zod            | stopped  | 43215    | fake     | 3031     |
-+----------------+----------+----------+----------+----------+
-| bus            | stopped  | 48901    | fake     | 3032     |
-+----------------+----------+----------+----------+----------+
-```
-
 ### `node` command
 
 ```txt

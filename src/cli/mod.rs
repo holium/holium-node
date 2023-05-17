@@ -1,6 +1,8 @@
+use crate::cli::printer::print_to_cli;
+
 use super::urbit;
-mod instance;
 pub mod printer;
+pub mod tmux;
 
 use std::{
     process::{exit},
@@ -108,11 +110,14 @@ pub async fn start(opt: Hol) -> std::io::Result<()>  {
             exit(0);
         }
         Subcommand::Start { } => {
-          instance::start_instance(&opt.server_id, opt.urbit_port.clone()).unwrap();
+          if !urbit::has_urbit_binary() {
+            print_to_cli("No urbit binary found. Please run `hol install` to install the binary.");
+          }
+          urbit::start_urbit(&opt.server_id, opt.urbit_port.clone()).unwrap();
           exit(0);
         }
         Subcommand::Stop {  } => {
-          instance::stop_instance(&opt.server_id, opt.urbit_port.clone()).unwrap();
+          urbit::stop_urbit(&opt.server_id, opt.urbit_port.clone())?;
           exit(0);
         }
         Subcommand::Clean {  method } => {

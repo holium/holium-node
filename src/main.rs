@@ -22,23 +22,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = cli::Hol::from_args();
 
     cli::start(cli::Hol::from_args()).await?;
-
-    // let child_processes_clone = Arc::clone(&child_processes);
-    // let get_instances = warp::get()
-    //     .and(warp::path("instances"))
-    //     .and_then(move || {
-    //         let child_processes_clone = Arc::clone(&child_processes_clone);
-    //         async move {
-    //             let mut response = HashMap::new();
-    //             {
-    //                 let instances = child_processes_clone.lock().unwrap();
-    //                 for (server_id, child) in instances.iter() {
-    //                     response.insert(server_id.clone(), child.id());
-    //                 }
-    //             }
-    //             Ok::<_, warp::Rejection>(warp::reply::json(&response))
-    //         }
-    //     });
+    // api::start()
 
     let client = Client::new();
     let forward = warp::any()

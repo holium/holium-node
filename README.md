@@ -17,6 +17,18 @@ rustc --version
 rustup update
 ```
 
+### 2. Install tmux
+
+On mac:
+```zsh
+brew install tmux
+```
+
+On linux:
+```zsh
+sudo apt-get tmux
+```
+
 ### 2. Build the project with cargo
 
 Build for dev:
@@ -36,3 +48,17 @@ cargo build --release
 
 cargo run -- -i zod --fake -p 9030
 ```
+
+## tmux guide
+
+### Listing sessions
+
+
+### Attaching to sessions
+```zsh
+tmux attach-session -t zod
+```
+
+### Detaching while in a session
+
+Ctrl + B, let go, then D
