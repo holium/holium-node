@@ -32,7 +32,7 @@ cargo build --release
 
 ### 3. Running the node
 
+The below command will print the debug cli
 ```zsh
-
-cargo run -- -i zod --fake -p 9030
+cargo run 
 ```
