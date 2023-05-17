@@ -6,7 +6,7 @@ use warp::{Filter};
 
 use structopt::StructOpt;
 use std::collections::HashMap;
-use std::sync::{Arc};
+// use std::sync::{Arc};
 
 use std::convert::Infallible;
 use warp::hyper::Body;
@@ -21,24 +21,24 @@ use warp::http::{HeaderMap, HeaderValue};
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = cli::Hol::from_args();
 
-    let child_processes = cli::start(cli::Hol::from_args()).await?;
+    cli::start(cli::Hol::from_args()).await?;
 
-    let child_processes_clone = Arc::clone(&child_processes);
-    let get_instances = warp::get()
-        .and(warp::path("instances"))
-        .and_then(move || {
-            let child_processes_clone = Arc::clone(&child_processes_clone);
-            async move {
-                let mut response = HashMap::new();
-                {
-                    let instances = child_processes_clone.lock().unwrap();
-                    for (server_id, child) in instances.iter() {
-                        response.insert(server_id.clone(), child.id());
-                    }
-                }
-                Ok::<_, warp::Rejection>(warp::reply::json(&response))
-            }
-        });
+    // let child_processes_clone = Arc::clone(&child_processes);
+    // let get_instances = warp::get()
+    //     .and(warp::path("instances"))
+    //     .and_then(move || {
+    //         let child_processes_clone = Arc::clone(&child_processes_clone);
+    //         async move {
+    //             let mut response = HashMap::new();
+    //             {
+    //                 let instances = child_processes_clone.lock().unwrap();
+    //                 for (server_id, child) in instances.iter() {
+    //                     response.insert(server_id.clone(), child.id());
+    //                 }
+    //             }
+    //             Ok::<_, warp::Rejection>(warp::reply::json(&response))
+    //         }
+    //     });
 
     let client = Client::new();
     let forward = warp::any()
@@ -72,7 +72,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         });
 
 
-    let routes = get_instances.or(forward);
+    let routes = forward;
     warp::serve(routes).run(([127, 0, 0, 1], opt.node_port)).await;
     Ok(())
 }

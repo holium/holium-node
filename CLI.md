@@ -11,6 +11,7 @@ Usage: hol boot --fake -p 9030 zod
        hol node zod start
 
 Commands:
+  install     Installs the Urbit binary
   boot        Boots a node with the identity provided.
   network     Configure network topology & discovery mechanism
   instance    Attach to instances for logs, metrics, and running commands
@@ -56,7 +57,9 @@ Options:
   -v, --verbose     Prints verbose logs
 
 Commands:
-  start       Starts the Urbit instance
+  install     Installs the Urbit binary
+  boot        Boots an identity and exits.
+  start       Starts the instance for the ID registered with the node
   stop        Stops the Urbit instance
   clean       Runs a cleanup script (pack, meld, chop, etc.)
   info        Prints the current vere and urbit version
@@ -65,6 +68,7 @@ Commands:
   upgrade     Checks for updates and applies them
   apps        Returns a list of all apps (agents) running with all metadata (docket)
   app         A subcommand for managing apps
+  version     Prints the current version of the Holium node
 ```
 
 ### `version` command
