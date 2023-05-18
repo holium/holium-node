@@ -1,5 +1,5 @@
-use std::process::Command;
 use std::io;
+use std::process::Command;
 
 pub struct TmuxManager {}
 
@@ -29,7 +29,7 @@ impl TmuxManager {
             .arg("-t")
             .arg(session_name)
             .arg(command_str)
-            .arg("Enter")  
+            .arg("Enter")
             .spawn()?;
         let _ = command_session.wait()?;
         Ok(())
@@ -37,9 +37,7 @@ impl TmuxManager {
 
     // List current tmux sessions
     pub fn list_sessions() -> io::Result<String> {
-        let output = Command::new("tmux")
-            .arg("list-sessions")
-            .output()?;
+        let output = Command::new("tmux").arg("list-sessions").output()?;
         Ok(String::from_utf8(output.stdout).unwrap())
     }
 

@@ -26,7 +26,7 @@ brew install tmux
 
 On linux:
 ```zsh
-sudo apt-get tmux
+sudo apt-get install tmux
 ```
 
 ### 2. Build the project with cargo
