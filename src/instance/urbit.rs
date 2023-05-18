@@ -29,17 +29,22 @@ impl UrbitInstance {
     }
 
     pub fn args_to_file(&self, server_id: &str, args: &str) -> io::Result<()> {
-        fs::write(format!("ships/{}/.params", server_id), args)?;
+        fs::write(format!("ships/.{}.params", server_id), args)?;
         Ok(())
     }
 
     pub fn fake_to_file(&self, server_id: &str) -> io::Result<()> {
-        fs::write(format!("ships/{}/.fake", server_id), true.to_string())?;
+        fs::write(format!("ships/.{}.fake", server_id), true.to_string())?;
+        Ok(())
+    }
+
+    pub fn clear_params_file(&self, server_id: &str) -> io::Result<()> {
+        fs::write(format!("ships/.{}.params", server_id), "")?;
         Ok(())
     }
 
     pub fn get_current_args(&self, server_id: &str) -> io::Result<Vec<String>> {
-        let args = fs::read_to_string(format!("ships/{}/.params", server_id))?;
+        let args = fs::read_to_string(format!("ships/.{}.params", server_id))?;
         let args = args.split("\n").map(|s| s.to_string()).collect();
         Ok(args)
     }
@@ -87,12 +92,17 @@ impl Instance for UrbitInstance {
     }
 
     fn boot(&self, server_id: &str, fake: bool, key: Option<String>, port: u16) -> io::Result<()> {
+        if !Path::new(format!("ships").as_str()).exists() {
+            Command::new("mkdir")
+                .arg("ships")
+                .output()
+                .expect("Failed to execute command");
+        }
         if !Path::new(format!("ships/{}", server_id).as_str()).exists() {
             // create screen session
             TmuxManager::create_session(&server_id, None)?;
-            let mut command = Command::new("screen");
+            let mut command = Command::new("./urbit");
             // execute urbit in screen session
-            command.arg("-X").arg(&server_id.to_string()).arg("./urbit");
             if fake {
                 command.arg("-F");
                 command.arg(&server_id.to_string());
@@ -100,11 +110,10 @@ impl Instance for UrbitInstance {
             } else if let Some(key) = &key {
                 command.arg("-w").arg(&server_id);
                 command.arg("-G").arg(key);
+                command.arg("-c").arg(format!("ships/{}", server_id));
             }
             command.arg("--http-port").arg(&port.to_string());
             TmuxManager::send_command(&server_id, &command)?;
-            let child = command.spawn().expect("Failed to execute command");
-            print_to_cli(format!("Started Urbit instance with PID {}", child.id()));
             // save args to file
             let mut args = Vec::new();
             args.push(format!("server_id: {}", server_id.to_string()));
@@ -160,6 +169,7 @@ impl Instance for UrbitInstance {
 
     fn stop(&self, server_id: &str, port: u16) -> io::Result<()> {
         TmuxManager::terminate_session(&server_id)?;
+        self.clear_params_file(server_id)?;
         print_to_cli(format!(
             "Stopped Urbit instance with server ID {} on port {}",
             server_id, port
