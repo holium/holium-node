@@ -57,7 +57,7 @@ cargo run
 ### Attaching to sessions
 ```zsh
 tmux attach-session -t zod
-```
+``` 
 
 ### Detaching while in a session
 
