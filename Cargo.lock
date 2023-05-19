@@ -434,12 +434,13 @@ dependencies = [
  "ctrlc",
  "futures",
  "prettycli",
- "reqwest",
  "serde",
+ "serde_json",
  "structopt",
  "term-table",
  "tokio",
  "warp",
+ "warp-reverse-proxy",
 ]
 
 [[package]]
@@ -1522,6 +1523,20 @@ dependencies = [
  "tokio-util",
  "tower-service",
  "tracing",
+]
+
+[[package]]
+name = "warp-reverse-proxy"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "948552bbb7a5fb4ba3169fd09b6c1ab53c1b2fdd82603295df550f7a1ec644c0"
+dependencies = [
+ "hyper",
+ "once_cell",
+ "reqwest",
+ "thiserror",
+ "unicase",
+ "warp",
 ]
 
 [[package]]

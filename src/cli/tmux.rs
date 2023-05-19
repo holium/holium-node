@@ -11,6 +11,8 @@ impl TmuxManager {
             .arg("-d")
             .arg("-s")
             .arg(session_name)
+            // .arg("pipe-pane")
+            // .arg(format!("ships/.{}.log", session_name))
             .arg("-c")
             .arg(".")
             .spawn()?;
@@ -44,6 +46,16 @@ impl TmuxManager {
     pub fn is_session_running(session_name: &str) -> bool {
         let output = TmuxManager::list_sessions().unwrap();
         output.contains(session_name)
+    }
+
+    pub fn attach_to_logs(session_name: &str) -> io::Result<()> {
+        let mut command_session = Command::new("tmux")
+            .arg("attach-session")
+            .arg("-t")
+            .arg(session_name)
+            .spawn()?;
+        let _ = command_session.wait()?;
+        Ok(())
     }
 
     // Terminate a tmux session
