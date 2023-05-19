@@ -1,6 +1,6 @@
-pub mod api;
 pub mod cli;
 pub mod instance;
+pub mod node;
 
 use structopt::StructOpt;
 

@@ -2,9 +2,9 @@ use std::{io, process::Command};
 
 use crate::cli::tmux::TmuxManager;
 
-pub struct APIService;
+pub struct NodeRunner;
 
-impl APIService {
+impl NodeRunner {
     pub fn start(&self, server_id: &str, node_port: u16, urbit_port: u16) -> io::Result<()> {
         let mut command = Command::new("cargo");
 

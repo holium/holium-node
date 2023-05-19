@@ -11,23 +11,18 @@ ctrlc = "3.1.9"
 warp = "0.3"
 structopt = "0.3"
 tokio = { version = "1", features = ["full"] }
-reqwest = { version = "0.11", features = ["json", "stream"] }
 serde = { version = "1.0", features = ["derive"] }
 futures = "0.3"
 bytes = "1.0"
 term-table = "1.1"
 prettycli = "*"
-axum = "0.6.18"
-tower = "0.4.13"
-inventory = "0.3.6"
-hyper = "0.14.26"
-tower-http = "0.4.0"
 serde_json = "1.0.96"
 warp-reverse-proxy = "1.0.0"
 
 
 [[bin]]
 name = "api"
+path = "src/bin/node/main.rs"
 test = false
 bench = false
 

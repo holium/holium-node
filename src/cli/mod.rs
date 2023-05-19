@@ -1,7 +1,7 @@
 // use crate::api::InstanceAPI;
-use crate::api::APIService;
 use crate::instance::urbit::{UrbitInstance, UrbitUpdateOptions};
 use crate::instance::Instance;
+use crate::node::runner::NodeRunner;
 
 pub mod printer;
 pub mod tmux;
@@ -113,21 +113,21 @@ pub async fn start(opt: Hol) -> std::io::Result<()> {
             urbit
                 .boot(&opt.server_id, fake, key, opt.urbit_port)
                 .unwrap();
-            APIService
+            NodeRunner
                 .start(&opt.server_id, opt.node_port, opt.urbit_port)
                 .unwrap();
             exit(0);
         }
         Subcommand::Start {} => {
             urbit.start(&opt.server_id, opt.urbit_port.clone()).unwrap();
-            APIService
+            NodeRunner
                 .start(&opt.server_id, opt.node_port, opt.urbit_port)
                 .unwrap();
             exit(0);
         }
         Subcommand::Stop {} => {
             urbit.stop(&opt.server_id, opt.urbit_port.clone())?;
-            APIService.stop(&opt.server_id).unwrap();
+            NodeRunner.stop(&opt.server_id).unwrap();
             exit(0);
         }
         Subcommand::Clean { method } => {
