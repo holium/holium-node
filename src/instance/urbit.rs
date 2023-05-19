@@ -125,7 +125,7 @@ impl Instance for UrbitInstance {
             let args = args.join("\n");
             self.args_to_file(server_id, &args)?;
         } else {
-            print_to_cli(format!("Identity {} is already booted", server_id));
+            print_to_cli(format!("instance '{}'     already booted", server_id));
         }
         Ok(())
     }
@@ -160,11 +160,10 @@ impl Instance for UrbitInstance {
             args.push(format!("all: {:?}", command.get_args().collect::<Vec<_>>()));
             let args = args.join("\n");
             self.args_to_file(server_id, &args)?;
-            Ok(())
         } else {
-            print_to_cli(format!("Identity {} is already running", server_id));
-            Ok(())
+            print_to_cli(format!("instance '{}'     already running", server_id));
         }
+        Ok(())
     }
 
     fn stop(&self, server_id: &str, port: u16) -> io::Result<()> {
