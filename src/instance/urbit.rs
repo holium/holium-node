@@ -183,7 +183,6 @@ impl Instance for UrbitInstance {
     }
 
     fn info(&self, server_id: &str) -> std::io::Result<()> {
-        println!("{} info", server_id);
         print_to_cli(TmuxManager::list_sessions()?);
         print_to_cli(self.get_current_args(server_id).unwrap().join("\n"));
         Ok(())

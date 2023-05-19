@@ -2,6 +2,7 @@
 name = "holon"
 version = "0.1.0"
 edition = "2021"
+default-run = "holon"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -16,7 +17,16 @@ futures = "0.3"
 bytes = "1.0"
 term-table = "1.1"
 prettycli = "*"
+axum = "0.6.18"
+tower = "0.4.13"
+inventory = "0.3.6"
+hyper = "0.14.26"
+tower-http = "0.4.0"
+serde_json = "1.0.96"
 
 
-
+[[bin]]
+name = "api"
+test = false
+bench = false
 

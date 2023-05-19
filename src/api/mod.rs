@@ -1,12 +1,30 @@
-pub struct API {}
+use std::{io, process::Command};
 
-impl API {
-    // pub fn start(&self, server_id: &str) -> API {
-    //     TmuxManager::create_session(&(server_id.to_string() + "-api"), None)?;
-    //     let mut command = Command::new("cargo");
-    //     command.arg("run").arg("--bin").arg("my_api_server");
-    //     TmuxManager::send_command(&(server_id.to_string() + "-api"), &command)?;
-    //     let child = command.spawn().expect("Failed to execute command");
-    //     print_to_cli(format!("Started API server with PID {}", child.id()));
-    // }
+use crate::cli::tmux::TmuxManager;
+
+pub struct APIService;
+
+impl APIService {
+    pub fn start(&self, server_id: &str, node_port: u16, urbit_port: u16) -> io::Result<()> {
+        let mut command = Command::new("cargo");
+
+        command
+            .arg("run")
+            .arg("--bin")
+            .arg("api")
+            .arg("--")
+            .arg("--urbit-port")
+            .arg(&urbit_port.to_string())
+            .arg("--node-port")
+            .arg(&node_port.to_string());
+
+        let session_name = format!("{}-api", server_id);
+        TmuxManager::create_session(session_name.as_str(), None)?;
+        TmuxManager::send_command(session_name.as_str(), &command)?;
+        Ok(())
+    }
+    pub fn stop(&self, server_id: &str) -> io::Result<()> {
+        TmuxManager::terminate_session(format!("{}-api", server_id).as_str())?;
+        Ok(())
+    }
 }
