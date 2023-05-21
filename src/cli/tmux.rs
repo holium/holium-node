@@ -25,12 +25,25 @@ impl TmuxManager {
 
     // Send a command to a detached tmux session
     pub fn send_command(session_name: &str, command: &Command) -> io::Result<()> {
-        let command_str = format!("{:?}", command);
+        // convert the command to a single string
+        let command_str = format!("{:?}", command.get_args());
         let mut command_session = Command::new("tmux")
             .arg("send-keys")
             .arg("-t")
             .arg(session_name)
             .arg(command_str)
+            .arg("Enter")
+            .spawn()?;
+        let _ = command_session.wait()?;
+        Ok(())
+    }
+
+    pub fn send_keys(session_name: &str, input_str: &str) -> io::Result<()> {
+        let mut command_session = Command::new("tmux")
+            .arg("send-keys")
+            .arg("-t")
+            .arg(session_name)
+            .arg(input_str)
             .arg("Enter")
             .spawn()?;
         let _ = command_session.wait()?;

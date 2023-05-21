@@ -2,7 +2,8 @@ use std::io;
 
 pub mod urbit;
 
-// Instance trait
+/// This is an abstract trait for the CLI interface. Instance
+/// types should implement this trait.
 pub trait Instance {
     type UpdateOptions;
 

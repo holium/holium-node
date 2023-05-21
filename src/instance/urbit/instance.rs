@@ -199,8 +199,8 @@ impl Instance for UrbitInstance {
 
     fn apps(&self, server_id: &str) -> std::io::Result<()> {
         println!("{}", server_id);
-
-        todo!()
+        TmuxManager::send_keys(server_id, "+vats")?;
+        Ok(())
     }
 
     fn app(&self, server_id: &str, app_name: &str) -> std::io::Result<()> {
