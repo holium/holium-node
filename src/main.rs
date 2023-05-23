@@ -1,5 +1,4 @@
 pub mod cli;
-pub mod db;
 pub mod instance;
 pub mod node;
 

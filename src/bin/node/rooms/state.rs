@@ -1,57 +1,90 @@
-use serde::Deserialize;
-use std::{
-    collections::{HashMap, HashSet},
-    convert::Infallible,
-};
-use warp::Filter;
+use super::api::CreateRoomPayload;
+use super::room::Room;
+use lazy_static::lazy_static;
+use serde::Serialize;
+use std::collections::{HashMap, HashSet};
+use std::sync::{Arc, Mutex};
 
-pub mod api;
-pub mod room;
+pub type Rooms = HashMap<String, Room>;
 
-use room::{Rid, Room};
-
-pub type Rooms = HashMap<Rid, Room>;
-
-#[derive(Debug)]
+#[derive(Debug, Serialize, Clone)]
 pub struct SessionState {
-    provider: String,
-    current: Option<Rid>,
-    rooms: Rooms,
+    pub provider: String,
+    pub current: Option<String>,
+    pub rooms: Rooms,
 }
 
 impl SessionState {
-    fn new(provider: String) -> Self {
+    pub fn new() -> Self {
         SessionState {
-            provider,
+            provider: String::new(),
             current: None,
             rooms: HashMap::new(),
         }
     }
-    fn change_provider(&mut self, provider: String) {
+    pub fn initialize(&mut self, provider: String) {
         self.provider = provider;
     }
-    fn update_current(&mut self, rid: Rid) {
-        self.current = Some(rid);
+
+    pub fn get_rooms(&self) -> &Rooms {
+        &self.rooms
     }
-    fn add_room(&mut self, room: Room) {
+
+    pub fn get_room(&self, rid: &str) -> Option<&Room> {
+        self.rooms.get(rid)
+    }
+
+    // pub fn set_provider(&mut self, provider: String) {
+    //     self.provider = provider;
+    // }
+    pub fn create_room(&mut self, create_payload: CreateRoomPayload) {
+        let room = Room::new(create_payload);
         self.rooms.insert(room.rid.clone(), room);
     }
-    fn remove_room(&mut self, rid: Rid) {
-        self.rooms.remove(&rid);
-    }
-    fn update_room(&mut self, room: Room) {
-        self.rooms.insert(room.rid.clone(), room);
-    }
+    // pub fn delete_room(&mut self, rid: String) {
+    //     self.rooms.remove(&rid);
+    // }
+    // pub fn edit_room(&mut self, room: Room) {}
+    // pub fn enter_room(&mut self, room: Room) {}
+    // pub fn leave_room(&mut self, room: Room) {}
+    // pub fn invite(&mut self, room: Room) {
+    //     self.rooms.insert(room.rid.clone(), room);
+    // }
+    // pub fn kick(&mut self, room: Room) {
+    //     self.rooms.insert(room.rid.clone(), room);
+    // }
+    // pub fn send_chat(&mut self, room: Room) {
+    //     self.rooms.insert(room.rid.clone(), room);
+    // }
 }
 
 #[derive(Debug)]
 pub struct ProviderState {
-    rooms: Rooms,
-    online: bool,
-    banned: HashSet<String>,
+    pub identity: String,
+    pub rooms: Rooms,
+    pub online: bool,
+    pub banned: HashSet<String>,
 }
 
 impl ProviderState {
+    pub fn new() -> Self {
+        ProviderState {
+            identity: String::new(),
+            rooms: HashMap::new(),
+            online: true,
+            banned: HashSet::new(),
+        }
+    }
+
+    // Add an initialize function
+    pub fn initialize(&mut self, identity: String) {
+        self.identity = identity;
+    }
+
+    pub fn get_identity(&mut self) -> String {
+        self.identity.clone()
+    }
+
     pub fn set_online(&mut self, online: bool) {
         self.online = online;
     }

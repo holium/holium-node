@@ -15,8 +15,9 @@ impl NodeRunner {
             command
                 .arg("run")
                 .arg("--bin")
-                .arg("api")
+                .arg("node")
                 .arg("--")
+                .arg(&server_id.to_string())
                 .arg("--urbit-port")
                 .arg(&urbit_port.to_string())
                 .arg("--node-port")

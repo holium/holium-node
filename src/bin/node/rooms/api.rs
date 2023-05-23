@@ -1,20 +1,31 @@
 use anyhow::Context;
 use serde::Deserialize;
 
+use crate::rooms::room::ROOMS_STATE;
+
 #[derive(Deserialize, Debug)]
 pub struct CreateRoomPayload {
-    rid: String,
-    access: String,
-    title: String,
-    path: Option<String>,
+    pub rid: String,
+    pub access: String,
+    pub title: String,
+    pub path: Option<String>,
 }
+
+#[derive(Deserialize, Debug)]
+pub struct EditRoomPayload {
+    pub rid: String,
+    pub access: String,
+    pub title: String,
+}
+
+pub type SourceShip = String;
 
 #[derive(Debug)]
 pub enum ActionType {
     SetProvider { ship: String },
     ResetProvider,
-    CreateRoom(CreateRoomPayload),
-    EditRoom,
+    CreateRoom(SourceShip, CreateRoomPayload),
+    EditRoom(SourceShip, EditRoomPayload),
     DeleteRoom,
     EnterRoom,
     LeaveRoom,
@@ -36,7 +47,9 @@ pub enum ActionType {
 //     ChatReceived,
 // }
 
-pub fn parse_action_type(json: &str) -> anyhow::Result<ActionType> {
+pub fn parse_action_type(json_tuple: (String, String)) -> anyhow::Result<ActionType> {
+    let source_ship = json_tuple.0;
+    let json = json_tuple.1.as_str();
     let value: serde_json::Value =
         serde_json::from_str(json).context("Failed to parse json in parse_action_type")?;
 
@@ -52,7 +65,7 @@ pub fn parse_action_type(json: &str) -> anyhow::Result<ActionType> {
             } else if action_map.contains_key("reset-provider") {
                 ActionType::ResetProvider
             } else if action_map.contains_key("create-room") {
-                println!("create-room action: {:?}", action_map.get("create-room"));
+                // println!("create-room action: {:?}", action_map.get("create-room"));
                 let room: CreateRoomPayload = serde_json::from_value(
                     action_map
                         .get("create-room")
@@ -60,9 +73,16 @@ pub fn parse_action_type(json: &str) -> anyhow::Result<ActionType> {
                         .clone(),
                 )
                 .context("Failed to parse create-room action")?;
-                ActionType::CreateRoom(room)
+                ActionType::CreateRoom(source_ship, room)
             } else if action_map.contains_key("edit-room") {
-                ActionType::EditRoom
+                let room_edit: EditRoomPayload = serde_json::from_value(
+                    action_map
+                        .get("edit-room")
+                        .ok_or(anyhow::anyhow!("missing create-room action"))?
+                        .clone(),
+                )
+                .context("Failed to parse edit-room action")?;
+                ActionType::EditRoom(source_ship, room_edit)
             } else if action_map.contains_key("delete-room") {
                 ActionType::DeleteRoom
             } else if action_map.contains_key("enter-room") {
@@ -95,17 +115,19 @@ pub async fn handle_action(action: ActionType) -> Result<(), warp::Rejection> {
             // Handle room created event...
             println!("Reset to default provider");
         }
-        ActionType::CreateRoom(data) => {
-            println!(
-                "Room created: {}, access: {:?}, {}, {}",
-                data.rid,
-                data.access,
-                data.title,
-                data.path.unwrap_or_default()
-            );
+        ActionType::CreateRoom(source_ship, data) => {
+            println!("{} is creating a room called {}", source_ship, data.title);
+            {
+                let mut rooms_state = ROOMS_STATE.lock().unwrap();
+                rooms_state.create_room(source_ship, data);
+            }
         }
-        ActionType::EditRoom {} => {
-            println!("Room edited");
+        ActionType::EditRoom(source_ship, data) => {
+            println!("{} is editing a room {}", source_ship, data.rid);
+            {
+                let mut rooms_state = ROOMS_STATE.lock().unwrap();
+                rooms_state.edit_room(source_ship, data);
+            }
         }
         ActionType::DeleteRoom {} => {
             println!("Room deleted");
@@ -128,4 +150,12 @@ pub async fn handle_action(action: ActionType) -> Result<(), warp::Rejection> {
     }
 
     Ok(())
+}
+
+pub async fn handle_get_session() -> Result<impl warp::Reply, warp::Rejection> {
+    let session = {
+        let rooms_state = ROOMS_STATE.lock().unwrap();
+        rooms_state.session.clone()
+    };
+    Ok(warp::reply::json(&session))
 }

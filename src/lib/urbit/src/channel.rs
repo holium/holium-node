@@ -1,14 +1,14 @@
-use crate::instance::urbit::error::{Result, UrbitAPIError};
-
-use crate::instance::urbit::interface::ShipInterface;
-use crate::instance::urbit::subscription::{CreationID, Subscription};
+use crate::error::{Result, UrbitAPIError};
 use eventsource_threaded::{EventSource, ReceiverSource};
+
 use json::{object, JsonValue};
 use rand::Rng;
-use reqwest::blocking::Response;
 use reqwest::header::HeaderMap;
+use reqwest::Response;
 use reqwest::Url;
 use std::time::SystemTime;
+
+use crate::{subscription::CreationID, ShipInterface, Subscription};
 
 /// A Channel which is used to interact with a ship
 #[derive(Debug)]
@@ -32,7 +32,7 @@ pub struct Channel {
 /// Channel methods for basic functionality
 impl Channel {
     /// Create a new channel
-    pub fn new(ship_interface: ShipInterface) -> Result<Channel> {
+    pub async fn new(ship_interface: ShipInterface) -> Result<Channel> {
         let mut rng = rand::thread_rng();
         // Defining the uid as UNIX time, or random if error
         let uid = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
@@ -55,7 +55,7 @@ impl Channel {
         };
 
         // Make the put request to create the channel.
-        let resp = ship_interface.send_put_request(&channel_url, &body)?;
+        let resp = ship_interface.send_put_request(&channel_url, &body).await?;
 
         if resp.status().as_u16() == 204 {
             // Create cookie header with the ship session auth val
@@ -80,7 +80,7 @@ impl Channel {
     }
 
     /// Sends a poke over the channel
-    pub fn poke(&mut self, app: &str, mark: &str, json: &JsonValue) -> Result<Response> {
+    pub async fn poke(&mut self, app: &str, mark: &str, json: &JsonValue) -> Result<Response> {
         let mut body = json::parse(r#"[]"#).unwrap();
         body[0] = object! {
                 "id": self.get_and_raise_message_id_count(),
@@ -92,16 +92,16 @@ impl Channel {
         };
 
         // Make the put request for the poke
-        self.ship_interface.send_put_request(&self.url, &body)
+        self.ship_interface.send_put_request(&self.url, &body).await
     }
 
     /// Sends a scry to the ship
-    pub fn scry(&self, app: &str, path: &str, mark: &str) -> Result<Response> {
-        self.ship_interface.scry(app, path, mark)
+    pub async fn scry(&self, app: &str, path: &str, mark: &str) -> Result<Response> {
+        self.ship_interface.scry(app, path, mark).await
     }
 
     /// Run a thread via spider
-    pub fn spider(
+    pub async fn spider(
         &self,
         input_mark: &str,
         output_mark: &str,
@@ -110,11 +110,12 @@ impl Channel {
     ) -> Result<Response> {
         self.ship_interface
             .spider(input_mark, output_mark, thread_name, body)
+            .await
     }
 
     /// Create a new `Subscription` and thus subscribes to events on the
     /// ship with the provided app/path.
-    pub fn create_new_subscription(&mut self, app: &str, path: &str) -> Result<CreationID> {
+    pub async fn create_new_subscription(&mut self, app: &str, path: &str) -> Result<CreationID> {
         // Saves the message id to be reused
         let creation_id = self.get_and_raise_message_id_count();
         // Create the json body
@@ -128,7 +129,10 @@ impl Channel {
         };
 
         // Make the put request to create the channel.
-        let resp = self.ship_interface.send_put_request(&self.url, &body)?;
+        let resp = self
+            .ship_interface
+            .send_put_request(&self.url, &body)
+            .await?;
 
         if resp.status().as_u16() == 204 {
             // Create the `Subscription`
@@ -212,7 +216,7 @@ impl Channel {
     }
 
     /// Deletes the channel
-    pub fn delete_channel(self) {
+    pub fn delete_channel(&self) {
         let mut json = json::parse(r#"[]"#).unwrap();
         json[0] = object! {
             "id": self.message_id_count,

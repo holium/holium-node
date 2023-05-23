@@ -1,14 +1,19 @@
 mod rooms;
 // mod socket;
-
 use structopt::StructOpt;
+use urbit_api::ShipInterface;
 use warp::Filter;
 use warp_reverse_proxy::reverse_proxy_filter;
+
+use crate::rooms::room::ROOMS_STATE;
 
 #[derive(StructOpt)]
 pub struct HolAPI {
     #[structopt(name = "hol-api", about = "The webserver part of the node")]
 
+    /// the identity of the instance
+    #[structopt()]
+    server_id: String,
     /// http-port for Urbit instance
     #[structopt(short = "p", long = "urbit-port", default_value = "9030")]
     pub urbit_port: u16,
@@ -21,22 +26,31 @@ pub struct HolAPI {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = HolAPI::from_args();
+    let server_url = format!("http://0.0.0.0:{}", opt.urbit_port.clone());
 
-    // Establish a connection pool.
-    // let pool = match establish_connection_pool("my_database.db") {
-    //     Ok(pool) => pool,
-    //     Err(e) => {
-    //         eprintln!("Failed to create connection pool: {}", e);
-    //         std::process::exit(1);
-    //     }
-    // };
+    println!("Starting Holium node on port {}", opt.urbit_port);
+
+    {
+        let mut rooms_state = ROOMS_STATE.lock().unwrap();
+        rooms_state.initialize(opt.server_id.clone());
+    }
+
+    let ship_interface = ShipInterface::new(server_url.as_str(), "lidlut-tabwed-pillex-ridrup")
+        .await
+        .unwrap();
+
+    let scry_res = ship_interface.scry("docket", "/our", "json").await.unwrap();
+    println!("scry_res: {}", scry_res.text().await.unwrap());
+
+    let docket_res = ship_interface
+        .scry("docket", "/charges", "json")
+        .await
+        .unwrap();
+    println!("docket_res: {}", docket_res.text().await.unwrap());
 
     let rooms_route = rooms::rooms_route();
 
-    let proxy = reverse_proxy_filter(
-        "".to_string(),
-        format!("http://localhost:{}", opt.urbit_port),
-    );
+    let proxy = reverse_proxy_filter("".to_string(), server_url);
 
     warp::path::full().map(|path: warp::path::FullPath| {
         println!("Incoming request at path: {}", path.as_str());

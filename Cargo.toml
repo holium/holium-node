@@ -7,6 +7,7 @@ authors = ["Trent Gillham <6413077+drunkplato@users.noreply.github.com>"]
 default-run = "holon"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
 
 [dependencies]
 ctrlc = "3.1.9"
@@ -25,11 +26,10 @@ anyhow = "1.0.71"
 rusqlite = "0.29.0"
 r2d2 = "0.8.10"
 r2d2_sqlite = "0.22.0"
-eventsource-threaded = "0.1.0"
-reqwest = { version = "0.11.18", features = ["blocking"] }
-thiserror = "1.0.40"
-json = "0.12.4"
-rand = "0.8.5"
+lazy_static = "1.4.0"
+serde_with = "3.0.0"
+urbit-api = { path = "./src/lib/urbit" }
+bedrock-db = { path = "./src/lib/db" }
 
 [dependencies.uuid]
 version = "1.3.3"

@@ -26,7 +26,8 @@ impl TmuxManager {
     // Send a command to a detached tmux session
     pub fn send_command(session_name: &str, command: &Command) -> io::Result<()> {
         // convert the command to a single string
-        let command_str = format!("{:?}", command.get_args());
+        let command_str = format!("{:?}", command).replace("\"", "");
+        println!("command_str: {}", command_str);
         let mut command_session = Command::new("tmux")
             .arg("send-keys")
             .arg("-t")

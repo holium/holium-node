@@ -1,0 +1,10 @@
+[package]
+name = "bedrock-db"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.71"
+rusqlite = "0.29.0"
+r2d2 = "0.8.10"
+r2d2_sqlite = "0.22.0"
