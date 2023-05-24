@@ -235,13 +235,3 @@ impl Channel {
         current_id_count
     }
 }
-
-// impl Channel {
-//     pub fn chat_db(&mut self) -> ChatDb {
-//         ChatDb { channel: self }
-//     }
-
-//     // pub fn bedrock(&mut self) -> Bedrock {
-//     //     Bedrock { channel: self }
-//     // }
-// }

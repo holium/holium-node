@@ -1,6 +1,4 @@
-pub mod cli;
-pub mod instance;
-pub mod node;
+mod cli;
 
 use structopt::StructOpt;
 

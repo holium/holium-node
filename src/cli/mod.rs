@@ -1,10 +1,11 @@
 // use crate::api::InstanceAPI;
-use crate::instance::urbit::{UrbitInstance, UrbitUpdateOptions};
-use crate::instance::Instance;
-use crate::node::runner::NodeRunner;
+use self::node::NodeRunner;
+use self::urbit::{Instance, UrbitInstance, UrbitUpdateOptions};
 
+mod node;
 pub mod printer;
 pub mod tmux;
+mod urbit;
 
 use std::process::exit;
 
