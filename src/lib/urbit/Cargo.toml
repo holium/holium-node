@@ -1,0 +1,14 @@
+[package]
+name = "urbit-api"
+version = "0.1.0"
+description = "A Rust library for interacting with Urbit's HTTP API. Ported from https://github.com/robkorn/rust-urbit-http-api"
+authors = ["Trent Gillham <6413077+drunkplato@users.noreply.github.com>", "Robert Kornacki <11645932+robkorn@users.noreply.github.com>"]
+edition = "2021"
+
+[dependencies]
+eventsource-threaded = "0.1.0"
+reqwest = { version = "0.11.18", features = ["blocking"] }
+thiserror = "1.0.40"
+json = "0.12.4"
+rand = "0.8.5"
+futures = "0.3"

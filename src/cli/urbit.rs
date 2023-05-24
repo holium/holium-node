@@ -1,4 +1,3 @@
-use crate::instance::Instance;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -6,6 +5,24 @@ use std::process::Command;
 
 use crate::cli::printer::print_to_cli;
 use crate::cli::tmux::TmuxManager;
+
+/// This is an abstract trait for the CLI interface. Instance
+/// types should implement this trait.
+pub trait Instance {
+    type UpdateOptions;
+
+    fn download_and_setup(&self, binary_name: &str) -> io::Result<()>;
+    fn boot(&self, server_id: &str, fake: bool, key: Option<String>, port: u16) -> io::Result<()>;
+    fn start(&self, server_id: &str, port: u16) -> io::Result<()>;
+    fn stop(&self, server_id: &str, port: u16) -> io::Result<()>;
+    fn clean(&self, server_id: &str, method: &str) -> io::Result<()>;
+    fn info(&self, server_id: &str) -> io::Result<()>;
+    fn logs(&self, server_id: &str, attach: bool, num_of_lines: i32) -> io::Result<()>;
+    fn upgrade(&self, server_id: &str, options: Self::UpdateOptions) -> io::Result<()>;
+    fn apps(&self, server_id: &str) -> io::Result<()>;
+    fn app(&self, server_id: &str, app_name: &str) -> io::Result<()>;
+    fn version(&self) -> io::Result<()>;
+}
 
 const BINARY_URL: &str = if cfg!(target_os = "macos") {
     "https://urbit.org/install/macos-x86_64/latest"
@@ -199,8 +216,8 @@ impl Instance for UrbitInstance {
 
     fn apps(&self, server_id: &str) -> std::io::Result<()> {
         println!("{}", server_id);
-
-        todo!()
+        TmuxManager::send_keys(server_id, "+vats")?;
+        Ok(())
     }
 
     fn app(&self, server_id: &str, app_name: &str) -> std::io::Result<()> {

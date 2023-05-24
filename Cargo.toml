@@ -2,9 +2,12 @@
 name = "holon"
 version = "0.1.0"
 edition = "2021"
+description = "A self-contained node that wraps an Urbit instance, delivering modern capabilities to Realm users."
+authors = ["Trent Gillham <6413077+drunkplato@users.noreply.github.com>"]
 default-run = "holon"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[workspace]
 
 [dependencies]
 ctrlc = "3.1.9"
@@ -18,10 +21,27 @@ term-table = "1.1"
 prettycli = "*"
 serde_json = "1.0.96"
 warp-reverse-proxy = "1.0.0"
+tokio-tungstenite = "0.19.0"
+anyhow = "1.0.71"
+rusqlite = "0.29.0"
+r2d2 = "0.8.10"
+r2d2_sqlite = "0.22.0"
+lazy_static = "1.4.0"
+serde_with = "3.0.0"
+urbit-api = { path = "./src/lib/urbit" }
+bedrock-db = { path = "./src/lib/db" }
+
+[dependencies.uuid]
+version = "1.3.3"
+features = [
+    "v4",                # Lets you generate random UUIDs
+    "fast-rng",          # Use a faster (but still sufficiently random) RNG
+    "macro-diagnostics", # Enable better diagnostics for compile-time UUIDs
+]
 
 
 [[bin]]
-name = "api"
+name = "node"
 path = "src/bin/node/main.rs"
 test = false
 bench = false
