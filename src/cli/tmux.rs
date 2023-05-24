@@ -59,15 +59,15 @@ impl TmuxManager {
         output.contains(session_name)
     }
 
-    pub fn attach_to_logs(session_name: &str) -> io::Result<()> {
-        let mut command_session = Command::new("tmux")
-            .arg("attach-session")
-            .arg("-t")
-            .arg(session_name)
-            .spawn()?;
-        let _ = command_session.wait()?;
-        Ok(())
-    }
+    // pub fn attach_to_logs(session_name: &str) -> io::Result<()> {
+    //     let mut command_session = Command::new("tmux")
+    //         .arg("attach-session")
+    //         .arg("-t")
+    //         .arg(session_name)
+    //         .spawn()?;
+    //     let _ = command_session.wait()?;
+    //     Ok(())
+    // }
 
     // Terminate a tmux session
     pub fn terminate_session(session_name: &str) -> io::Result<()> {

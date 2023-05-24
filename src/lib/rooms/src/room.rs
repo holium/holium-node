@@ -1,5 +1,4 @@
 // use serde::Deserialize;
-use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -93,6 +92,17 @@ impl RoomsState {
         }
         self.session.rooms.remove(&rid);
     }
+
+    // pub fn enter_room(&mut self, source_ship: SourceShip, rid: String) {
+    //     let mut room = self.session.rooms.get_mut(&rid).expect("Room not found");
+    //     if room.access == "public" {
+    //         room.present.push(source_ship.clone());
+    //     } else if room.access == "invite" {
+    //         if room.whitelist.contains(&source_ship) {
+    //             room.present.push(source_ship.clone());
+    //         }
+    //     }
+    // }
 }
 
 lazy_static! {

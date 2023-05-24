@@ -746,6 +746,7 @@ dependencies = [
  "r2d2",
  "r2d2_sqlite",
  "reqwest 0.11.18",
+ "rooms",
  "rusqlite",
  "serde",
  "serde_json",
@@ -1580,6 +1581,23 @@ dependencies = [
  "wasm-streams",
  "web-sys",
  "winreg 0.10.1",
+]
+
+[[package]]
+name = "rooms"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "eventsource-threaded",
+ "futures",
+ "json",
+ "lazy_static",
+ "rand",
+ "reqwest 0.11.18",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "warp",
 ]
 
 [[package]]

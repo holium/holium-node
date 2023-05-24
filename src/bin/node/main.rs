@@ -1,12 +1,11 @@
 mod helpers;
-mod rooms;
-use proctitle::set_title;
+use rooms::room::ROOMS_STATE;
 use structopt::StructOpt;
 use urbit_api::ShipInterface;
 use warp::Filter;
 use warp_reverse_proxy::reverse_proxy_filter;
 
-use crate::{helpers::wait_for_server, rooms::room::ROOMS_STATE};
+use crate::helpers::wait_for_server;
 
 #[derive(StructOpt)]
 pub struct HolAPI {
@@ -48,11 +47,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let scry_res = ship_interface.scry("docket", "/our", "json").await.unwrap();
     println!("test_scry: {}", scry_res.text().await.unwrap());
 
-    // let docket_res = ship_interface
-    //     .scry("docket", "/charges", "json")
-    //     .await
-    //     .unwrap();
-    // println!("docket_res: {}", docket_res.text().await.unwrap());
+    let docket_res = ship_interface
+        .scry("docket", "/charges", "json")
+        .await
+        .unwrap();
+    println!("docket_res: {}", docket_res.text().await.unwrap());
 
     let rooms_route = rooms::rooms_route();
 

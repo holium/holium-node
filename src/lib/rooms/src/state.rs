@@ -1,9 +1,7 @@
 use super::api::CreateRoomPayload;
 use super::room::Room;
-use lazy_static::lazy_static;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
 
 pub type Rooms = HashMap<String, Room>;
 
