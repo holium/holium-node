@@ -32,6 +32,23 @@ const BINARY_URL: &str = if cfg!(target_os = "macos") {
     panic!("Unsupported platform");
 };
 
+pub fn symlink_urbit_binary(server_id: String) -> io::Result<String> {
+    let symlinked_urbit = format!("{}_urbit", server_id);
+    TmuxManager::send_command(
+        &server_id,
+        &Command::new("ln")
+            .arg("-s")
+            .arg("urbit")
+            .arg(&symlinked_urbit),
+    )?;
+    Command::new("ln")
+        .arg("-s")
+        .arg("urbit")
+        .arg(&symlinked_urbit)
+        .output()?;
+    Ok(symlinked_urbit)
+}
+
 pub struct UrbitInstance;
 
 pub struct UrbitUpdateOptions {
@@ -118,7 +135,17 @@ impl Instance for UrbitInstance {
         if !Path::new(format!("ships/{}", server_id).as_str()).exists() {
             // create screen session
             TmuxManager::create_session(&server_id, None)?;
-            let mut command = Command::new("./urbit");
+            let symlinked_urbit = symlink_urbit_binary(server_id.to_string())?;
+            // smylink server_id_urbit to urbit
+            TmuxManager::send_command(
+                &server_id,
+                &Command::new("ln")
+                    .arg("-s")
+                    .arg("urbit")
+                    .arg(&symlinked_urbit),
+            )?;
+
+            let mut command = Command::new(format!("./{}", symlinked_urbit));
             // execute urbit in screen session
             if fake {
                 command.arg("-F");
@@ -155,7 +182,8 @@ impl Instance for UrbitInstance {
         let is_running = TmuxManager::is_session_running(server_id);
         if !is_running {
             TmuxManager::create_session(&server_id, None)?;
-            let mut command = Command::new("./urbit");
+            let symlinked_urbit = symlink_urbit_binary(server_id.to_string())?;
+            let mut command = Command::new(format!("./{}", symlinked_urbit));
 
             // check if a folder with the server ID exists
             if !Path::new(format!("ships/{}", server_id).as_str()).exists() {

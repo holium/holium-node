@@ -742,8 +742,10 @@ dependencies = [
  "futures",
  "lazy_static",
  "prettycli",
+ "proctitle",
  "r2d2",
  "r2d2_sqlite",
+ "reqwest 0.11.18",
  "rusqlite",
  "serde",
  "serde_json",
@@ -1397,6 +1399,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b63bdb0cd06f1f4dedf69b254734f9b45af66e4a031e42a7480257d9898b435"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "proctitle"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "924cd8a0de90723d63fed19c5035ea129913a0bc998b37686a67f1eaf6a2aab5"
+dependencies = [
+ "lazy_static",
+ "libc",
+ "winapi 0.3.9",
 ]
 
 [[package]]
