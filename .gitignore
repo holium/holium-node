@@ -1,6 +1,7 @@
 /target
 
 # project specific files
+*_urbit
 urbit
 !urbit/
 hol-urbit
