@@ -1,7 +1,7 @@
 use anyhow::Context;
 use serde::Deserialize;
 
-use crate::rooms::room::ROOMS_STATE;
+use crate::room::ROOMS_STATE;
 
 #[derive(Deserialize, Debug)]
 pub struct CreateRoomPayload {

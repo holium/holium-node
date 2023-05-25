@@ -179,11 +179,3 @@ pub async fn start(opt: Hol) -> std::io::Result<()> {
         }
     }
 }
-
-pub fn handle_ctrl_c() {
-    ctrlc::set_handler(move || {
-        // Do stuff before exiting
-        exit(0);
-    })
-    .expect("Error setting Ctrl-C handler");
-}

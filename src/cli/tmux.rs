@@ -11,8 +11,6 @@ impl TmuxManager {
             .arg("-d")
             .arg("-s")
             .arg(session_name)
-            // .arg("pipe-pane")
-            // .arg(format!("ships/.{}.log", session_name))
             .arg("-c")
             .arg(".")
             .spawn()?;
@@ -27,7 +25,6 @@ impl TmuxManager {
     pub fn send_command(session_name: &str, command: &Command) -> io::Result<()> {
         // convert the command to a single string
         let command_str = format!("{:?}", command).replace("\"", "");
-        println!("command_str: {}", command_str);
         let mut command_session = Command::new("tmux")
             .arg("send-keys")
             .arg("-t")
@@ -39,7 +36,7 @@ impl TmuxManager {
         Ok(())
     }
 
-    pub fn send_keys(session_name: &str, input_str: &str) -> io::Result<()> {
+    pub fn send_dojo_command(session_name: &str, input_str: &str) -> io::Result<()> {
         let mut command_session = Command::new("tmux")
             .arg("send-keys")
             .arg("-t")
@@ -62,15 +59,15 @@ impl TmuxManager {
         output.contains(session_name)
     }
 
-    pub fn attach_to_logs(session_name: &str) -> io::Result<()> {
-        let mut command_session = Command::new("tmux")
-            .arg("attach-session")
-            .arg("-t")
-            .arg(session_name)
-            .spawn()?;
-        let _ = command_session.wait()?;
-        Ok(())
-    }
+    // pub fn attach_to_logs(session_name: &str) -> io::Result<()> {
+    //     let mut command_session = Command::new("tmux")
+    //         .arg("attach-session")
+    //         .arg("-t")
+    //         .arg(session_name)
+    //         .spawn()?;
+    //     let _ = command_session.wait()?;
+    //     Ok(())
+    // }
 
     // Terminate a tmux session
     pub fn terminate_session(session_name: &str) -> io::Result<()> {

@@ -742,8 +742,11 @@ dependencies = [
  "futures",
  "lazy_static",
  "prettycli",
+ "proctitle",
  "r2d2",
  "r2d2_sqlite",
+ "reqwest 0.11.18",
+ "rooms",
  "rusqlite",
  "serde",
  "serde_json",
@@ -1400,6 +1403,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "proctitle"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "924cd8a0de90723d63fed19c5035ea129913a0bc998b37686a67f1eaf6a2aab5"
+dependencies = [
+ "lazy_static",
+ "libc",
+ "winapi 0.3.9",
+]
+
+[[package]]
 name = "quote"
 version = "1.0.27"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1567,6 +1581,23 @@ dependencies = [
  "wasm-streams",
  "web-sys",
  "winreg 0.10.1",
+]
+
+[[package]]
+name = "rooms"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "eventsource-threaded",
+ "futures",
+ "json",
+ "lazy_static",
+ "rand",
+ "reqwest 0.11.18",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "warp",
 ]
 
 [[package]]
