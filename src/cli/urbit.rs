@@ -222,8 +222,21 @@ impl Instance for UrbitInstance {
     }
 
     fn clean(&self, server_id: &str, method: &str) -> std::io::Result<()> {
-        println!("{}, {}", server_id, method);
-        todo!()
+        println!("{} {}", server_id, method);
+        println!("yeo yeo yeo");
+        let is_running = TmuxManager::is_session_running(server_id);
+        if !is_running {
+            println!("not running");
+        } else {
+            println!("running");
+            TmuxManager::send_dojo_command(server_id, "|exit")?;
+            let symlinked_urbit_binary = format!("./{}_urbit", server_id.to_string());
+            let mut command = Command::new(symlinked_urbit_binary);
+            command.arg("pack");
+            command.arg(format!("ships/{}", server_id));
+            TmuxManager::send_command(&server_id, &command)?;
+        }
+        Ok(())
     }
 
     fn info(&self, server_id: &str) -> std::io::Result<()> {
