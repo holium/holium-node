@@ -36,7 +36,7 @@ impl TmuxManager {
         Ok(())
     }
 
-    pub fn send_keys(session_name: &str, input_str: &str) -> io::Result<()> {
+    pub fn send_dojo_command(session_name: &str, input_str: &str) -> io::Result<()> {
         let mut command_session = Command::new("tmux")
             .arg("send-keys")
             .arg("-t")

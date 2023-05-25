@@ -47,11 +47,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let scry_res = ship_interface.scry("docket", "/our", "json").await.unwrap();
     println!("test_scry: {}", scry_res.text().await.unwrap());
 
-    let docket_res = ship_interface
-        .scry("docket", "/charges", "json")
-        .await
-        .unwrap();
-    println!("docket_res: {}", docket_res.text().await.unwrap());
+    // let docket_res = ship_interface
+    //     .scry("docket", "/charges", "json")
+    //     .await
+    //     .unwrap();
+    // println!("docket_res: {}", docket_res.text().await.unwrap());
 
     let rooms_route = rooms::rooms_route();
 
