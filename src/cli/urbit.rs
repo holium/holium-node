@@ -221,9 +221,74 @@ impl Instance for UrbitInstance {
     }
 
     fn clean(&self, server_id: &str, method: &str) -> std::io::Result<()> {
-        graceful_exit(server_id, 5).unwrap();
-        println!("{}, {}", server_id, method);
-        // self.start(server_id, port)
+        println!("urbit clean: {}, {}", server_id, method);
+        //Create the list of allowable methods
+        //Check to see if method is in the list
+        //If so, continue
+        //If not, panic I guess and show list of available methods
+
+        //check to see if the server ID is valid.
+        //What is the authoritative check for that?  Actually, won't that
+        //be performed at the higher level?  This should just check for
+        //urbit for the server ID.
+        //If it's not valid, then panic.  Otherwise continue.
+
+        //Now we can check if its running, because we will do cleans
+        //on a down ship for safety.
+        let is_running = TmuxManager::is_session_running(server_id);
+        //let graceful_exit = unknown
+        if is_running {
+            println!("running, bringing down for maintenance");
+            //must catpure the current ports so it can be restored to 
+            //existing state (but you can't do that with everything) 
+            //(so maybe it makes sense to persist in DB from startup)
+
+            //Bring down the urbit using the new method, be willing to
+            //wait up to 15 seconds.  Capture whether or not the exit
+            //was graceful.  If an error, panic.
+            let result = graceful_exit(server_id, 5).unwrap();
+            //graceful_exit(server_id, max_wait_seconds).unwrap();
+            if result == [("graceful_exit", true)].iter().cloned().collect() {
+                println!("Urbit process exited gracefully");
+            } else {
+                println!("Urbit process did not exit gracefully");
+            }            
+        } 
+        //Now test for the presence of "pack", "meld", and "chop"
+        //in the method.
+
+        //If pack is part of the method, run pack, and surface the result and
+        //the exit code.
+        let symlinked_pack_binary = format!("./{}_urbit", server_id.to_string());
+        let mut pack_command = Command::new(symlinked_pack_binary);
+        pack_command.arg("pack");
+        pack_command.arg(format!("ships/{}", server_id));
+        TmuxManager::send_command(&server_id, &pack_command)?;
+
+        //If meld is part of the method, run meld, and surface the result and
+        //the exit code.
+        let symlinked_meld_binary = format!("./{}_urbit", server_id.to_string());
+        let mut meld_command = Command::new(symlinked_meld_binary);
+        meld_command.arg("meld");
+        meld_command.arg(format!("ships/{}", server_id));
+        TmuxManager::send_command(&server_id, &meld_command)?;
+
+        //if graceful_exit true or unknown and chop, run chop, and surface the result and
+        //the exit code.
+
+        //if graceful_exit false and chop, inform that it won't be run due
+        //to hard exit.
+
+        //If the ship was running before, restore it to its prior state.
+        if is_running {
+            println!("maintenance complete, starting again");
+        }
+        //Need to check if it's actually running and accepting commands.
+        //If so, we can get rid of the chop files.
+        //If it died, Uh oh...
+        //If it's running the processes but not accepting input, then
+        //maybe wait a bit longer?  Gotta think about this one...
+
         Ok(())
     }
 
