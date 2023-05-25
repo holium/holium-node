@@ -229,7 +229,15 @@ impl Instance for UrbitInstance {
             println!("not running");
         } else {
             println!("running");
+// Running this command via Tmux is what I DON'T want to do...
             TmuxManager::send_dojo_command(server_id, "|exit")?;
+// and what I really want to do is something more like this via lens:
+            /*
+            let exit_status = helper::ship_exit(server_id)
+            .await
+            .expect("Could not get exit status");
+            print_to_cli(exit_status);
+            */
             let symlinked_urbit_binary = format!("./{}_urbit", server_id.to_string());
             let mut command = Command::new(symlinked_urbit_binary);
             command.arg("pack");
