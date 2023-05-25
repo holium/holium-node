@@ -6,23 +6,7 @@ use std::process::Command;
 use crate::cli::printer::print_to_cli;
 use crate::cli::tmux::TmuxManager;
 
-/// This is an abstract trait for the CLI interface. Instance
-/// types should implement this trait.
-pub trait Instance {
-    type UpdateOptions;
-
-    fn download_and_setup(&self, binary_name: &str) -> io::Result<()>;
-    fn boot(&self, server_id: &str, fake: bool, key: Option<String>, port: u16) -> io::Result<()>;
-    fn start(&self, server_id: &str, port: u16) -> io::Result<()>;
-    fn stop(&self, server_id: &str, port: u16) -> io::Result<()>;
-    fn clean(&self, server_id: &str, method: &str) -> io::Result<()>;
-    fn info(&self, server_id: &str) -> io::Result<()>;
-    fn logs(&self, server_id: &str, attach: bool, num_of_lines: i32) -> io::Result<()>;
-    fn upgrade(&self, server_id: &str, options: Self::UpdateOptions) -> io::Result<()>;
-    fn apps(&self, server_id: &str) -> io::Result<()>;
-    fn app(&self, server_id: &str, app_name: &str) -> io::Result<()>;
-    fn version(&self) -> io::Result<()>;
-}
+use urbit_api::process::graceful_exit;
 
 const BINARY_URL: &str = if cfg!(target_os = "macos") {
     "https://urbit.org/install/macos-x86_64/latest"
@@ -49,6 +33,22 @@ pub fn symlink_urbit_binary(server_id: String) -> io::Result<String> {
     Ok(symlinked_urbit)
 }
 
+pub trait Instance {
+    type UpdateOptions;
+
+    fn download_and_setup(&self, binary_name: &str) -> io::Result<()>;
+    fn boot(&self, server_id: &str, fake: bool, key: Option<String>, port: u16) -> io::Result<()>;
+    fn start(&self, server_id: &str, port: u16) -> io::Result<()>;
+    fn stop(&self, server_id: &str, port: u16) -> io::Result<()>;
+    fn clean(&self, server_id: &str, method: &str) -> io::Result<()>;
+    fn info(&self, server_id: &str) -> io::Result<()>;
+    fn logs(&self, server_id: &str, attach: bool, num_of_lines: i32) -> io::Result<()>;
+    fn upgrade(&self, server_id: &str, options: Self::UpdateOptions) -> io::Result<()>;
+    fn apps(&self, server_id: &str) -> io::Result<()>;
+    fn app(&self, server_id: &str, app_name: &str) -> io::Result<()>;
+    fn version(&self) -> io::Result<()>;
+}
+
 pub struct UrbitInstance;
 
 pub struct UrbitUpdateOptions {
@@ -56,7 +56,6 @@ pub struct UrbitUpdateOptions {
     pub update_urbit: Option<bool>,
     pub update_all: Option<bool>,
 }
-
 impl UrbitInstance {
     pub fn has_urbit_binary(&self) -> bool {
         Path::new("./urbit").exists()
@@ -222,28 +221,9 @@ impl Instance for UrbitInstance {
     }
 
     fn clean(&self, server_id: &str, method: &str) -> std::io::Result<()> {
-        println!("{} {}", server_id, method);
-        println!("yeo yeo yeo");
-        let is_running = TmuxManager::is_session_running(server_id);
-        if !is_running {
-            println!("not running");
-        } else {
-            println!("running");
-// Running this command via Tmux is what I DON'T want to do...
-            TmuxManager::send_dojo_command(server_id, "|exit")?;
-// and what I really want to do is something more like this via lens:
-            /*
-            let exit_status = helper::ship_exit(server_id)
-            .await
-            .expect("Could not get exit status");
-            print_to_cli(exit_status);
-            */
-            let symlinked_urbit_binary = format!("./{}_urbit", server_id.to_string());
-            let mut command = Command::new(symlinked_urbit_binary);
-            command.arg("pack");
-            command.arg(format!("ships/{}", server_id));
-            TmuxManager::send_command(&server_id, &command)?;
-        }
+        graceful_exit(server_id, 5).unwrap();
+        println!("{}, {}", server_id, method);
+        // self.start(server_id, port)
         Ok(())
     }
 

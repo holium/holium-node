@@ -1,6 +1,7 @@
 // use crate::api::InstanceAPI;
 use self::node::NodeRunner;
-use self::urbit::{Instance, UrbitInstance, UrbitUpdateOptions};
+use self::urbit::Instance;
+use self::urbit::{UrbitInstance, UrbitUpdateOptions};
 
 mod node;
 pub mod printer;
@@ -101,7 +102,7 @@ pub enum Subcommand {
     Version,
 }
 
-pub async fn start(opt: Hol) -> std::io::Result<()> {
+pub fn start(opt: Hol) -> std::io::Result<()> {
     let urbit = UrbitInstance;
 
     match opt.command {

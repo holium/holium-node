@@ -1,11 +1,9 @@
 mod cli;
 
 use structopt::StructOpt;
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = cli::Hol::from_args();
 
-    cli::start(opt).await?;
+    cli::start(opt).unwrap();
     Ok(())
 }
