@@ -6,23 +6,7 @@ use std::process::Command;
 use crate::cli::printer::print_to_cli;
 use crate::cli::tmux::TmuxManager;
 
-/// This is an abstract trait for the CLI interface. Instance
-/// types should implement this trait.
-pub trait Instance {
-    type UpdateOptions;
-
-    fn download_and_setup(&self, binary_name: &str) -> io::Result<()>;
-    fn boot(&self, server_id: &str, fake: bool, key: Option<String>, port: u16) -> io::Result<()>;
-    fn start(&self, server_id: &str, port: u16) -> io::Result<()>;
-    fn stop(&self, server_id: &str, port: u16) -> io::Result<()>;
-    fn clean(&self, server_id: &str, method: &str) -> io::Result<()>;
-    fn info(&self, server_id: &str) -> io::Result<()>;
-    fn logs(&self, server_id: &str, attach: bool, num_of_lines: i32) -> io::Result<()>;
-    fn upgrade(&self, server_id: &str, options: Self::UpdateOptions) -> io::Result<()>;
-    fn apps(&self, server_id: &str) -> io::Result<()>;
-    fn app(&self, server_id: &str, app_name: &str) -> io::Result<()>;
-    fn version(&self) -> io::Result<()>;
-}
+use urbit_api::process::graceful_exit;
 
 const BINARY_URL: &str = if cfg!(target_os = "macos") {
     "https://urbit.org/install/macos-x86_64/latest"
@@ -49,6 +33,22 @@ pub fn symlink_urbit_binary(server_id: String) -> io::Result<String> {
     Ok(symlinked_urbit)
 }
 
+pub trait Instance {
+    type UpdateOptions;
+
+    fn download_and_setup(&self, binary_name: &str) -> io::Result<()>;
+    fn boot(&self, server_id: &str, fake: bool, key: Option<String>, port: u16) -> io::Result<()>;
+    fn start(&self, server_id: &str, port: u16) -> io::Result<()>;
+    fn stop(&self, server_id: &str, port: u16) -> io::Result<()>;
+    fn clean(&self, server_id: &str, method: &str) -> io::Result<()>;
+    fn info(&self, server_id: &str) -> io::Result<()>;
+    fn logs(&self, server_id: &str, attach: bool, num_of_lines: i32) -> io::Result<()>;
+    fn upgrade(&self, server_id: &str, options: Self::UpdateOptions) -> io::Result<()>;
+    fn apps(&self, server_id: &str) -> io::Result<()>;
+    fn app(&self, server_id: &str, app_name: &str) -> io::Result<()>;
+    fn version(&self) -> io::Result<()>;
+}
+
 pub struct UrbitInstance;
 
 pub struct UrbitUpdateOptions {
@@ -56,7 +56,6 @@ pub struct UrbitUpdateOptions {
     pub update_urbit: Option<bool>,
     pub update_all: Option<bool>,
 }
-
 impl UrbitInstance {
     pub fn has_urbit_binary(&self) -> bool {
         Path::new("./urbit").exists()
@@ -222,8 +221,10 @@ impl Instance for UrbitInstance {
     }
 
     fn clean(&self, server_id: &str, method: &str) -> std::io::Result<()> {
+        graceful_exit(server_id, 5).unwrap();
         println!("{}, {}", server_id, method);
-        todo!()
+        // self.start(server_id, port)
+        Ok(())
     }
 
     fn info(&self, server_id: &str) -> std::io::Result<()> {

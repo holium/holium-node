@@ -35,9 +35,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_url = format!("127.0.0.1:{}", opt.urbit_port.clone());
     wait_for_server(&server_url.parse().expect("Cannot parse url")).await?;
 
-    let access_code = helpers::get_access_code(opt.server_id.clone())
-        .await
-        .expect("Could not get access code");
+    // Cannot drop a runtime in a context where blocking is not allowed
+    let access_code = urbit_api::lens::get_access_code(opt.server_id.clone()).await?;
 
     let http_server_url = format!("http://localhost:{}", opt.urbit_port.clone());
     let ship_interface = ShipInterface::new(http_server_url.as_str(), access_code.trim())
