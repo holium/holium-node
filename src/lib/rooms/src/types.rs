@@ -47,23 +47,23 @@ lazy_static! {
 #[serde(untagged)]
 pub enum Response {
     Ok {
-        r#type: String,
+        rtype: String,
     },
     Error {
-        r#type: String,
+        rtype: String,
         message: String,
     },
-    Room {
-        r#type: String,
+    RoomUpdate {
+        rtype: String,
         room: String,
         peers: Vec<Peer>,
     },
     PeerJoined {
-        r#type: String,
+        rtype: String,
         peer_id: PeerId,
     },
     PeerLeft {
-        r#type: String,
+        rtype: String,
         peer_id: PeerId,
     },
 }

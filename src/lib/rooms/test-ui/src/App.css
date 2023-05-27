@@ -1,5 +1,9 @@
 .App {
   text-align: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
 
 .App-logo {
@@ -29,4 +33,23 @@
 
 video {
   width: 100%;
+}
+
+.peers {
+  display: flex;
+  flex-direction: column;
+  margin-left: 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  width: 230px;
+
+}
+
+.peer-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #ccc;
 }

@@ -10,29 +10,49 @@ const enableTrickle = true
 function App() {
   const [status, setStatus] = useState('disconnected');
   const [peers, setPeers] = useState({});
+  const [present, setPresent] = useState([]);
   const [stream, setStream] = useState(null);
   const [mediaErr, setMediaErr] = useState(null);
   const [username, setUsername] = useState(""); 
-  const [payload, setPayload] = useState("");
+  const [payload, setPayload] = useState(`
+    {
+      "type": "create-room"
+    }
+    {
+      "type": "enter-room",
+      "rid": "room-~zod"
+    }
+  `);
   const videoRef = useRef();
   const socketRef = useRef();
 
-  // useEffect(() => {
-  //   getMedia((stream) => {
-  //     setStream(stream);
-  //   }, err => {
-  //     setMediaErr('Could not access webcam');
-  //     debug('getMedia error', err);
-  //   });
-  // }, []);
 
-  // useEffect(() => {
-  //   if (stream && videoRef.current && !videoRef.current.srcObject) {
-  //     debug('set video stream', videoRef.current, stream)
-  //     videoRef.current.srcObject = stream
-  //   }
-  //   attachPeerVideos();
-  // }, [stream, peers]);
+  useEffect(() => {
+    const getMedia = async () => {
+      if (!videoRef.current) return;
+      try {
+        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        // const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        if(videoRef.current) {
+            videoRef.current.srcObject = mediaStream;
+        }
+      } catch (err) {
+        console.error('Could not get user media:', err);
+      }
+    }
+
+    getMedia();
+  }, []);
+
+  useEffect(() => {
+    if (stream && videoRef.current && !videoRef.current.srcObject) {
+      debug('set video stream', videoRef.current, stream)
+      videoRef.current.srcObject = stream
+    }
+    if (peers.length > 0) {
+      attachPeerVideos();
+    }
+  }, [stream, peers]);
 
   const attachPeerVideos = () => {
     let newPeers = {...peers};
@@ -46,10 +66,6 @@ function App() {
     })
     setPeers(newPeers);
   }
-
-  const handleUsernameChange = (event) => {
-    setUsername(event.target.value);
-  };
 
   const getMedia = (callback, err) => {
     const options = { video: true, audio: true }
@@ -80,42 +96,43 @@ function App() {
       const msgId = (new Date().getTime())
       const msg = { msgId, signal, to: peerId }
       debug('peer signal sent', msg)
+
       this.socket.emit('signal', msg)
     })
   
     peer.on('stream', (stream) => {
       debug('Got peer stream!!!', peerId, stream)
       peer.stream = stream
-      this.setPeerState(peerId, peer)
+      setPeerState(peerId, peer)
     })
 
     peer.on('connect', () => {
       debug('Connected to peer', peerId)
       peer.connected = true
-      this.setPeerState(peerId, peer)
-      peer.send(this.serialize({
+      setPeerState(peerId, peer)
+      peer.send(serialize({
         msg: 'hey man!'
       }))
     })
 
     peer.on('data', data => {
-      debug('Data from peer', peerId, this.unserialize(data))
+      debug('Data from peer', peerId, unserialize(data))
     })
 
     peer.on('error', (e) => {
       debug('Peer error %s:', peerId, e);
     })
 
-    this.setPeerState(peerId, peer)
+    setPeerState(peerId, peer)
 
     return peer
   }
 
   const destroyPeer = (peerId) => {
-    const peers = {...this.state.peers}
+    const peers = {...peers}
     delete peers[peerId]
-    this.setState({
-      peers
+    setPeers({
+      ...peers
     })
   }
 
@@ -132,10 +149,10 @@ function App() {
   }
 
   const setPeerState = (peerId, peer) => {
-    const peers = {...this.state.peers}
+    const peers = {...peers}
     peers[peerId] = peer
-    this.setState({
-      peers
+    setPeers({
+     ...peers
     })
   }
 
@@ -149,16 +166,16 @@ function App() {
 
   const connect = () => {
     socketRef.current = new WebSocket(`ws://localhost:3030/signaling?serverId=${username}`);
+    setPresent([username]);
+
     socketRef.current.onopen = function open() {
-      console.log('connected');
       setStatus('connected');
-      socketRef.current.send(JSON.stringify({ type: 'ping' }));
+      socketRef.current.send(JSON.stringify({ type: 'connect' }));
     };
 
     socketRef.current.onmessage = function incoming(message) {
-      console.log(message)
       const parsedMessage = JSON.parse(message.data);
-      console.log(parsedMessage)
+      responseParser(parsedMessage);
     };
 
     socketRef.current.onclose = function close() {
@@ -174,7 +191,7 @@ function App() {
     };
     // on sigkill close the connection
     window.onbeforeunload = function () {
-      socketRef.current.close();
+      disconnect();
     }
   };
 
@@ -182,6 +199,22 @@ function App() {
     socketRef.current.send(JSON.stringify({ type: 'disconnect' }));
     socketRef.current.close();
   };
+
+  const responseParser = (response) => {
+    switch (response.type) {
+      case 'rooms': 
+        // setRooms(response.rooms);
+        console.log('rooms', response.rooms);
+        break;
+      case 'room-entered':
+        setPresent(response.room.present);
+        break;
+      case 'room-left':
+        setPresent(response.room.present);
+        break;
+    }
+  };
+
 
   const sendPayload = () => {
     try {
@@ -231,7 +264,24 @@ function App() {
       {mediaErr && (
         <p className="error">{mediaErr}</p>
       )}
-      <div id="peers">{renderPeers()}</div>
+      
+      <div style={{display: 'flex', flexDirection: 'row', width: 700, marginTop: 30}}>
+        <div id="our-video">
+          <video style={{width: 400}} ref={videoRef} autoPlay playsInline />
+        </div>
+        <div className="peers">{present.map((peer) => {
+          let callbutton = null;
+          if (peer !== username) {
+            callbutton = <button onClick={() => createPeer(peer, true, stream)}>Call</button>
+          }
+          return (
+            <div className="peer-row" key={peer}>
+              {peer}
+              {callbutton}
+            </div>
+          )
+        })}</div>
+      </div>
     </div>
   );
 }
