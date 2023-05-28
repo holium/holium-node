@@ -8,12 +8,19 @@ const debug = require('debug')('screen-share:app')
 const enableTrickle = true
 
 function App() {
+  // get query param ?serverId=xxx&path=xxx
+  const urlParams = new URLSearchParams(window.location.search);
+  const serverId = urlParams.get('serverId');
+  const path = urlParams.get('path');
+  const [roomName, setRoomName] = useState('test'); // room-~zod
   const [status, setStatus] = useState('disconnected');
   const [peers, setPeers] = useState({});
   const [present, setPresent] = useState([]);
+  const [rooms, setRooms] = useState([]);
+  const [currentRoom, setCurrentRoom] = useState(null);
   const [stream, setStream] = useState(null);
   const [mediaErr, setMediaErr] = useState(null);
-  const [username, setUsername] = useState(""); 
+  const [username, setUsername] = useState(serverId); 
   const [payload, setPayload] = useState(`
     {
       "type": "create-room"
@@ -40,6 +47,16 @@ function App() {
         console.error('Could not get user media:', err);
       }
     }
+
+    if (username) {
+      connect();
+    }
+    
+    fetch('http://localhost:3030/hol/rooms').then(res => res.json()).then(res => {
+      setRooms(res);
+    }).catch(err => {
+      console.error('Could not get rooms:', err);
+    });
 
     getMedia();
   }, []);
@@ -89,15 +106,17 @@ function App() {
 
   const createPeer = (peerId, initiator, stream) => {
     debug('creating new peer', peerId, initiator)
+    // if (!currentRoom) {
+    //   debug('no current room')
+    //   return
+    // }
 
     const peer = new Peer({initiator: initiator, trickle: enableTrickle, stream})
 
     peer.on('signal', (signal) => {
-      const msgId = (new Date().getTime())
-      const msg = { msgId, signal, to: peerId }
+      const msg = { type: "signal", rid: currentRoom.rid, signal, to: peerId, from: username }
       debug('peer signal sent', msg)
-
-      this.socket.emit('signal', msg)
+      socketRef.current.send(serialize(msg))
     })
   
     peer.on('stream', (stream) => {
@@ -166,15 +185,14 @@ function App() {
 
   const connect = () => {
     socketRef.current = new WebSocket(`ws://localhost:3030/signaling?serverId=${username}`);
-    setPresent([username]);
 
     socketRef.current.onopen = function open() {
       setStatus('connected');
-      socketRef.current.send(JSON.stringify({ type: 'connect' }));
+      socketRef.current.send(serialize({ type: 'connect' }));
     };
 
     socketRef.current.onmessage = function incoming(message) {
-      const parsedMessage = JSON.parse(message.data);
+      const parsedMessage = unserialize(message.data);
       responseParser(parsedMessage);
     };
 
@@ -196,21 +214,67 @@ function App() {
   };
 
   const disconnect = () => {
-    socketRef.current.send(JSON.stringify({ type: 'disconnect' }));
+    socketRef.current.send(serialize({ type: 'disconnect' }));
     socketRef.current.close();
+  };
+
+  const isInRoom = (rid) => {
+    if (!currentRoom) {
+      return false;
+    }
+    return currentRoom.rid === rid;
+  };
+
+  const isCreator = (rid) => {
+    const room = rooms.find((room) => room.rid === rid);
+    if (!room) {
+      return false;
+    }
+    return room.creator === username;
+  };
+
+  const createRoom = (roomName) => {
+    socketRef.current.send(serialize({ type: 'create-room', rid: `${username}/${roomName}`, title: roomName }));
+  };
+
+  const deleteRoom = (rid) => {
+    socketRef.current.send(serialize({ type: 'delete-room', rid }));
   };
 
   const responseParser = (response) => {
     switch (response.type) {
       case 'rooms': 
-        // setRooms(response.rooms);
-        console.log('rooms', response.rooms);
+        let currentRoom = null;
+        response.rooms.forEach((room) => {
+          if (room.creator === username) {
+            currentRoom = room;
+            setPresent(room.present);
+          }
+          if (room.present.includes(username)) {
+            currentRoom = room;
+            setPresent(room.present);
+          }
+        });
+        setRooms(response.rooms);
+        setCurrentRoom(currentRoom);
         break;
       case 'room-entered':
+        setCurrentRoom(response.room);
         setPresent(response.room.present);
         break;
       case 'room-left':
         setPresent(response.room.present);
+        break;
+      case 'room-deleted':
+        const removeRid = response.rid;
+        setRooms(rooms.filter((room) => room.rid !== removeRid));
+        break;
+      case 'signal':
+        const { signal, from } = response;
+        console.log('got signal', signal, from);
+        // TODO handle signal
+        console.log(peers)
+        // peers[from].signal(signal);
         break;
     }
   };
@@ -218,8 +282,8 @@ function App() {
 
   const sendPayload = () => {
     try {
-      let parsedPayload = JSON.parse(payload);
-      socketRef.current.send(JSON.stringify(parsedPayload));
+      let parsedPayload = unserialize(payload);
+      socketRef.current.send(serialize(parsedPayload));
     } catch (e) {
       console.log('invalid json', e)
     }
@@ -238,11 +302,15 @@ function App() {
             evt.stopPropagation()
             setUsername(evt.target.value);
           }}
-        />
-        <button onClick={() => connect()}>Connect</button>
-        <button onClick={() => disconnect()}>Disconnect</button>
+          />
 
         </div>
+        <div style={{marginTop: 8, marginBottom: 8}}>Holium node: {status}</div>
+        <div style={{ display: 'flex', flexDirection: 'row', gap: 8, justifyContent: 'center' }}>
+          <button disabled={status === 'connected'} onClick={() => connect()}>Connect</button>
+          <button  disabled={status === 'disconnected'} onClick={() => disconnect()}>Disconnect</button>
+        </div>
+          
       </header>
       <div style={{display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center'}}>
         <textarea
@@ -265,7 +333,44 @@ function App() {
         <p className="error">{mediaErr}</p>
       )}
       
-      <div style={{display: 'flex', flexDirection: 'row', width: 700, marginTop: 30}}>
+      <div style={{ display: 'flex', flexDirection: 'row', width: 900, marginTop: 30 }}>
+        <div className='rooms-list'>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 8, padding: '8px 8px' }}>
+            <input
+              type="text"
+              placeholder="Enter room name"
+              value={roomName}
+              onChange={(evt) => {
+                evt.stopPropagation()
+                setRoomName(evt.target.value);
+              }}
+            />
+          <button onClick={() => createRoom(roomName)}>Create</button>
+          {/* <button onClick={() => deleteRoom()}>Delete room</button> */}
+        </div>
+          <div style={{ display: 'flex', flexDirection: 'column'}}>
+            {rooms.map((room) => {
+              return (
+                <div key={room} className="room-row">
+                  <span>{room.rid}</span>
+                  {!isInRoom(room.rid) ? (
+                    <button onClick={() => {
+                      socketRef.current.send(serialize({ type: 'enter-room', rid: room.rid }));
+                    }}>Enter</button>
+                  ) : (
+                      isCreator(room.rid) ? (
+                        <button onClick={() => deleteRoom(room.rid)}>Delete</button>
+                      ) : (
+                      <button onClick={() => {
+                        socketRef.current.send(serialize({ type: 'leave-room', rid: room.rid }));
+                      }}>Leave</button>
+                      )
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
         <div id="our-video">
           <video style={{width: 400}} ref={videoRef} autoPlay playsInline />
         </div>

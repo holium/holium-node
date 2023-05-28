@@ -53,3 +53,21 @@ video {
   padding: 8px 12px;
   border-bottom: 1px solid #ccc;
 }
+
+.rooms-list {
+  display: flex;
+  flex-direction: column;
+  margin-right: 12px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  width: 230px;
+}
+
+.room-row {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #ccc;
+}

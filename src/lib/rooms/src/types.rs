@@ -40,7 +40,9 @@ pub type RoomLock = Arc<RwLock<Room>>;
 pub type RoomTuple = (PeerMap, RoomLock);
 
 lazy_static! {
-    pub static ref ROOM_MAP: RwLock<HashMap<Rid, RoomTuple>> = RwLock::new(HashMap::new());
+    // pub static ref ROOM_MAP: RwLock<HashMap<Rid, RoomTuple>> = RwLock::new(HashMap::new());
+    pub static ref ROOM_MAP: RwLock<HashMap<Rid, RoomLock>> = RwLock::new(HashMap::new());
+    pub static ref PEER_MAP: RwLock<HashMap<PeerId, PeerInfo>> = RwLock::new(HashMap::new());
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
