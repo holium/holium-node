@@ -47,9 +47,7 @@ video {
 
 .peer-row {
   display: flex;
-  flex-direction: row;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
   padding: 8px 12px;
   border-bottom: 1px solid #ccc;
 }
