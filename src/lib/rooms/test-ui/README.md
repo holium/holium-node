@@ -1,20 +1,13 @@
-# Simple-Peer and Socket.io
+# Rooms test ui
 
-A video chat and screen share using simple-peer for webrtc and socket.io for signaling. 
-
-## Install
+## Getting started
 
 ```
-git clone https://github.com/fijiwebdesign/simple-peer-react
-cd simple-peer-react
 yarn
+
+yarn start
 ```
 
-## Run
+### Setting username
 
-```
-yarn dev:socket.io # start socket io server
-yarn start # start react app
-```
-
-
+`http://localhost:3000/?serverId=~zod` will set the username to `~zod`.
