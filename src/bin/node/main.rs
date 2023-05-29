@@ -1,5 +1,4 @@
 mod helpers;
-use rooms::room::ROOMS_STATE;
 use structopt::StructOpt;
 use urbit_api::ShipInterface;
 use warp::Filter;
@@ -27,11 +26,6 @@ pub struct HolAPI {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = HolAPI::from_args();
 
-    {
-        let mut rooms_state = ROOMS_STATE.lock().unwrap();
-        rooms_state.initialize(opt.server_id.clone());
-    }
-
     let server_url = format!("127.0.0.1:{}", opt.urbit_port.clone());
     wait_for_server(&server_url.parse().expect("Cannot parse url")).await?;
 
@@ -52,15 +46,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     //     .unwrap();
     // println!("docket_res: {}", docket_res.text().await.unwrap());
 
-    let rooms_route = rooms::rooms_route();
-
+    let rooms_route = rooms::api::rooms_route();
+    let signaling_route = rooms::socket::signaling_route();
     let proxy = reverse_proxy_filter("".to_string(), http_server_url);
 
     warp::path::full().map(|path: warp::path::FullPath| {
         println!("Incoming request at path: {}", path.as_str());
     });
 
-    let routes = rooms_route.or(proxy);
+    // let routes = rooms_route.or(proxy);
+    let routes = rooms_route.or(signaling_route).or(proxy);
 
     warp::serve(routes)
         .run(([127, 0, 0, 1], opt.node_port))

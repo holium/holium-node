@@ -1,10 +1,12 @@
 // use crate::api::InstanceAPI;
 use self::node::NodeRunner;
+// use self::rooms::RoomsRunner;
 use self::urbit::Instance;
 use self::urbit::{UrbitInstance, UrbitUpdateOptions};
 
 mod node;
 pub mod printer;
+// mod rooms;
 pub mod tmux;
 mod urbit;
 
@@ -100,6 +102,9 @@ pub enum Subcommand {
     /// Prints the current version
     #[structopt(name = "version")]
     Version,
+    /// Get the current instance access code
+    #[structopt(name = "code")]
+    Code,
 }
 
 pub fn start(opt: Hol) -> std::io::Result<()> {
@@ -125,11 +130,13 @@ pub fn start(opt: Hol) -> std::io::Result<()> {
             NodeRunner
                 .start(&opt.server_id, opt.node_port, opt.urbit_port)
                 .unwrap();
+            // RoomsRunner.start(&opt.server_id).unwrap();
             exit(0);
         }
         Subcommand::Stop {} => {
             urbit.stop(&opt.server_id, opt.urbit_port.clone())?;
             NodeRunner.stop(&opt.server_id).unwrap();
+            // RoomsRunner.stop(&opt.server_id).unwrap();
             exit(0);
         }
         Subcommand::Clean { method } => {
@@ -176,6 +183,15 @@ pub fn start(opt: Hol) -> std::io::Result<()> {
             let version = env!("CARGO_PKG_VERSION");
             println!("hol version {}", version);
             urbit.version().unwrap();
+            exit(0);
+        }
+        Subcommand::Code => {
+            let access_code = tokio::runtime::Runtime::new()
+                .unwrap()
+                .block_on(urbit_api::lens::get_access_code(opt.server_id))
+                .unwrap();
+
+            println!("{}", access_code);
             exit(0);
         }
     }
