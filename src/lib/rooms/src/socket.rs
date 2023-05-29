@@ -144,9 +144,14 @@ pub async fn handle_message(
 
             // send self a room-created message
             let rooms = ROOM_MAP.read().unwrap();
+            let room = match rooms.get(&rid) {
+                Some(room) => room,
+                None => return,
+            };
+            let room = room.read().unwrap();
             let message = json!({
                 "type": "room-created",
-                "room": rooms.get(&rid),
+                "room": room.clone(),
             });
             sender.send(Message::text(message.to_string())).unwrap();
         }
