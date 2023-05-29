@@ -10,39 +10,21 @@ default-run = "holon"
 [workspace]
 
 [dependencies]
-ctrlc = "3.1.9"
-warp = "0.3"
-structopt = "0.3"
-tokio = { version = "1", features = ["full"] }
-serde = { version = "1.0", features = ["derive"] }
-futures = "0.3"
-bytes = "1.0"
-term-table = "1.1"
-prettycli = "*"
-serde_json = "1.0.96"
-warp-reverse-proxy = "1.0.0"
-tokio-tungstenite = "0.19.0"
-anyhow = "1.0.71"
-rusqlite = "0.29.0"
-r2d2 = "0.8.10"
-r2d2_sqlite = "0.22.0"
-lazy_static = "1.4.0"
-serde_with = "3.0.0"
-urbit-api = { path = "./src/lib/urbit" }
 bedrock-db = { path = "./src/lib/db" }
 rooms = { path = "./src/lib/rooms" }
-reqwest = { version = "0.11", features = ["blocking", "json"] }
-proctitle = "0.1.1"
-async-trait = "0.1.68"
-actix-web = "4.3.1"
-actix-web-actors = "4.2.0"
-mediasoup = "0.11.4"
+urbit-api = { path = "./src/lib/urbit" }
+bytes = "1.0"
 event-listener-primitives = "2.0.1"
+lazy_static = "1.4.0"
 parking_lot = "0.12.1"
-async-lock = "2.7.0"
-actix = "0.13.0"
-futures-lite = "1.13.0"
-env_logger = "0.10.0"
+reqwest = { version = "0.11", features = ["blocking", "json"] }
+term-table = "1.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.96"
+structopt = "0.3"
+tokio = { version = "1", features = ["full"] }
+warp = "0.3"
+warp-reverse-proxy = "1.0.0"
 
 
 [dependencies.uuid]
