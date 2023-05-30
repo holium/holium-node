@@ -28,14 +28,24 @@ pub async fn get_pid_and_loopback(
     server_id: String,
 ) -> Result<(String, String), Box<dyn std::error::Error>> {
     let pid_str = get_pid(&server_id).await?;
-
-    let loopback = Command::new("sh")
-        .arg("-c")
-        .arg(format!(
+    let cmd_str = if cfg!(target_os = "macos") {
+        format!(
           "lsof -n -P -p {} |  grep '127.0.0.1' | grep urbit | grep -i listen | cut -d':' -f2 | cut -c -5 | tr -d '\n'", 
           pid_str
-        ))
-        .output().expect("failed to find loopback");
+        )
+    } else if cfg!(target_os = "linux") {
+        format!(
+          "lsof -n -P -p {} |  grep '127.0.0.1' | grep -i listen | cut -d':' -f2 | cut -c -5 | tr -d '\n'", 
+          pid_str
+        )
+    } else {
+        panic!("Unsupported platform");
+    };
+    let loopback = Command::new("sh")
+        .arg("-c")
+        .arg(cmd_str)
+        .output()
+        .expect("failed to find loopback");
 
     let loopback_str = String::from_utf8_lossy(&loopback.stdout).to_string();
 
