@@ -57,9 +57,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // let routes = rooms_route.or(proxy);
     let routes = rooms_route.or(signaling_route).or(proxy);
 
-    warp::serve(routes)
-        .run(([127, 0, 0, 1], opt.node_port))
-        .await;
+    warp::serve(routes).run(([0, 0, 0, 0], opt.node_port)).await;
 
     Ok(())
 }
