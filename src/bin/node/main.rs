@@ -1,7 +1,11 @@
 mod helpers;
+use std::sync::Arc;
+
+use warp::{reject, Filter};
+
 use structopt::StructOpt;
 use urbit_api::ShipInterface;
-use warp::Filter;
+
 use warp_reverse_proxy::reverse_proxy_filter;
 
 use crate::helpers::wait_for_server;
@@ -29,35 +33,70 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_url = format!("127.0.0.1:{}", opt.urbit_port.clone());
     wait_for_server(&server_url.parse().expect("Cannot parse url")).await?;
 
-    // Cannot drop a runtime in a context where blocking is not allowed
     let access_code = urbit_api::lens::get_access_code(opt.server_id.clone()).await?;
 
     let http_server_url = format!("http://localhost:{}", opt.urbit_port.clone());
-    let ship_interface = ShipInterface::new(http_server_url.as_str(), access_code.trim())
-        .await
-        .expect("Could not create ship interface");
+
+    // set static ship_interface
+    let ship_interface = Arc::new(
+        ShipInterface::new(http_server_url.as_str(), access_code.trim())
+            .await
+            .expect("Could not create ship interface"),
+    );
 
     let scry_res = ship_interface.scry("docket", "/our", "json").await.unwrap();
     println!("test_scry: {}", scry_res.text().await.unwrap());
 
-    // let docket_res = ship_interface
-    //     .scry("docket", "/charges", "json")
-    //     .await
-    //     .unwrap();
-    // println!("docket_res: {}", docket_res.text().await.unwrap());
-
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
+
+    // check for a valid header on ship requests
+    let header_check = warp::header::<String>("Cookie")
+        .and_then({
+            move |cookie: String| {
+                let ship_interface = Arc::clone(&ship_interface);
+                // split the first ; and take the first part
+                let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();
+                async move {
+                    let scry_res = ship_interface
+                        .scry(
+                            "holon",
+                            format!("/valid-cookie/{}", cookie).as_str(),
+                            "json",
+                        )
+                        .await
+                        .unwrap();
+
+                    let is_valid = scry_res
+                        .json::<serde_json::Value>()
+                        .await
+                        .unwrap()
+                        .get("is-valid")
+                        .unwrap()
+                        .as_bool()
+                        .unwrap();
+
+                    if is_valid {
+                        // continue to the proxy
+                        Ok(())
+                    } else {
+                        Err(reject::custom(Unauthorized))
+                    }
+                }
+            }
+        })
+        .untuple_one();
+
     let proxy = reverse_proxy_filter("".to_string(), http_server_url);
 
-    warp::path::full().map(|path: warp::path::FullPath| {
-        println!("Incoming request at path: {}", path.as_str());
-    });
-
-    // let routes = rooms_route.or(proxy);
-    let routes = rooms_route.or(signaling_route).or(proxy);
+    let routes = rooms_route.or(signaling_route).or(header_check.and(proxy));
 
     warp::serve(routes).run(([0, 0, 0, 0], opt.node_port)).await;
 
     Ok(())
 }
+
+#[derive(Debug)]
+struct Unauthorized;
+
+impl reject::Reject for Unauthorized {}

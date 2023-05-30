@@ -31,6 +31,11 @@
       =/  peers  .^((map @p ?(%alien %known)) %ax [(scot %p our.bowl) %$ (scot %da now.bowl) %peers ~])
       ``noun+!>((view:enjs:lib [%peers peers]))
       ::
+        [%x %valid-cookie @ ~]
+      =/  cookie  i.t.t.path
+      =/  valid  .^(? %ex [(scot %p our.bowl) %$ (scot %da now.bowl) %authenticated %cookie (scot %t cookie) ~])
+      ``noun+!>((pairs:enjs:format ~[['is-valid' b+valid]]))
+      ::
         [%x %peers @ ~]
       ?>  =(our.bowl src.bowl)
       =/  =ship  `@p`(slav %p i.t.t.path)
