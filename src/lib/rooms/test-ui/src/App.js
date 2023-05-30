@@ -9,6 +9,11 @@ import PeerStore from './PeerStore';
 
 const enableTrickle = true
 
+const ws = 'wss://'
+const tls = 'https://'
+const nodeUrl = 'node-0.holium.live'
+// const nodeUrl = 'http://localhost:3030' 
+
 
 function App() {
   // get query param ?serverId=xxx&path=xxx
@@ -59,7 +64,7 @@ function App() {
       connect();
     }
     
-    fetch('http://localhost:3030/hol/rooms').then(res => res.json()).then(res => {
+    fetch(`${tls}${nodeUrl}/hol/rooms`).then(res => res.json()).then(res => {
       setRoomsState(res);
     }).catch(err => {
       console.error('Could not get rooms:', err);
@@ -132,7 +137,7 @@ function App() {
   }
  
   const connect = () => {
-    socketRef.current = new WebSocket(`ws://localhost:3030/signaling?serverId=${username}`);
+    socketRef.current = new WebSocket(`${ws}${nodeUrl}/signaling?serverId=${username}`);
 
     socketRef.current.onopen = function open() {
       setStatus('connected');
