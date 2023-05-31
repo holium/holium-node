@@ -50,7 +50,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let signaling_route = rooms::socket::signaling_route();
     let proxy = reverse_proxy_filter("".to_string(), http_server_url);
 
-    let app_store_routes = urbit_api::apps::api::app_store_routes(ship_interface);
+    let app_store_routes = apps::routes::app_store_routes(ship_interface);
 
     warp::path::full().map(|path: warp::path::FullPath| {
         println!("Incoming request at path: {}", path.as_str());

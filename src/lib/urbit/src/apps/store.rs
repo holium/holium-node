@@ -1,4 +1,4 @@
-use serde::Deserialize;
+// use serde::{Default, Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::ShipInterface;
@@ -8,10 +8,10 @@ use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, AppStoreAPIError>;
 
-#[derive(Deserialize)]
-struct Response {
-    initial: Map<String, Value>,
-}
+// #[derive(Deserialize)]
+// struct Response {
+//     initial: Map<String, Value>,
+// }
 
 #[derive(Error, Debug)]
 pub enum AppStoreAPIError {
@@ -27,93 +27,125 @@ pub enum AppStoreAPIError {
     ReqwestError(#[from] ReqError),
 }
 
-// to truly uniquely identify apps on the Urbit network, you need the "fully qualified path";
-//  or the a string of the form: "<ship>/<desk>"
-pub struct AppURI {
-    // name of ship where app was either originally downloaded, or the ship from
-    //  which app udpates should be installed. assuming here that the UI will allow for
-    //  changing the host ship of any app
-    pub ship_name: String,
-    // name of the desk (e.g. realm, base, garden, landscape, et. al.)
-    pub desk: String,
-}
-
-#[derive(Debug)]
-pub enum AppStatus {
-    // active and running
-    Running,
-    Suspended,
-}
-
-#[derive(Debug)]
-pub enum UpdateStatus {
-    // receive updates via commits on the local ship
-    Local,
-    // receive updates from the source ship
-    Tracking,
-    // do not receive updates
-    Paused,
-}
-
-//
-#[derive(Debug)]
-pub struct AppListing {
-    // Universal resource identifier as a string of the form: '<ship>/<desk>'
-    pub uri: String,
-    // Ship name (parsed from uri)
-    pub ship_name: String,
-    // Desk name (parsed from uri)
-    pub app_name: String,
-    // Kelvin supported versions
-    pub sys_kelvin: Vec<String>,
-    // base hash ends in
-    pub base_hash: String,
-    // %cz hash ends in
-    pub cz_hash: String,
-    // app status as reported by +vats interface
-    pub app_status: AppStatus,
-    // original publishing ship
-    pub publishing_ship: String,
-    // updates status
-    pub updates: UpdateStatus,
-    // the desk on the source ship
-    pub source_desk: String,
-    // The revision number of the desk on the source ship
-    pub source_aeon: String,
-    // Updates waiting to be applied due to incompatibility
-    pub pending_updates: Vec<String>,
-    // docket info
-}
-
-// #[derive(Deserialize, Debug)]
-// struct Docket {
-//     desk: String,
-//     id: u32,
+// // to truly uniquely identify apps on the Urbit network, you need the "fully qualified path";
+// //  or the a string of the form: "<ship>/<desk>"
+// pub struct AppURI {
+//     // name of ship where app was either originally downloaded, or the ship from
+//     //  which app udpates should be installed. assuming here that the UI will allow for
+//     //  changing the host ship of any app
+//     pub ship_name: String,
+//     // name of the desk (e.g. realm, base, garden, landscape, et. al.)
+//     pub desk: String,
 // }
 
-// combine scries across various agents to create one unified payload capable of driving the entire
-//  Realm desktop grid
-pub async fn get_app_detail(
-    ship_interface: ShipInterface,
-    desk: String,
-) -> Result<Map<String, Value>> {
+// #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub enum AppStatus {
+//     // active and running
+//     Running,
+//     Suspended,
+//     #[default]
+//     Unknown,
+// }
+
+// #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub enum UpdateStatus {
+//     // receive updates via commits on the local ship
+//     Local,
+//     // receive updates from the source ship
+//     Tracking,
+//     // do not receive updates
+//     Paused,
+//     #[default]
+//     Unknown,
+// }
+
+// //
+// #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+// #[serde(rename_all = "camelCase")]
+// pub struct AppDetail {
+//     // Universal resource identifier as a string of the form: '<ship>/<desk>'
+//     pub uri: String,
+//     // Ship name (parsed from uri)
+//     pub ship_name: String,
+//     // Desk name (parsed from uri)
+//     pub app_name: String,
+//     // Kelvin supported versions
+//     pub sys_kelvin: Vec<String>,
+//     // base hash ends in
+//     pub base_hash: String,
+//     // %cz hash ends in
+//     pub cz_hash: String,
+//     // app status as reported by +vats interface
+//     pub app_status: AppStatus,
+//     // original publishing ship
+//     pub publishing_ship: String,
+//     // updates status
+//     pub updates: UpdateStatus,
+//     // the desk on the source ship
+//     pub source_desk: String,
+//     // The revision number of the desk on the source ship
+//     pub source_aeon: String,
+//     // Updates waiting to be applied due to incompatibility
+//     pub pending_updates: Vec<String>,
+//     //
+//     // docket info
+//     //
+//     // pub image: String,
+//     // pub title: String,
+//     // pub license: String,
+//     // pub version: String,
+//     // pub website: String,
+//     // pub href: Href,
+//     // pub chad: Chad,
+//     // pub color: String,
+//     // pub info: String,
+// }
+
+pub async fn get_apps(ship_interface: ShipInterface) -> Result<Map<String, Value>> {
     let docket_res = ship_interface
         .scry("docket", "/charges", "json")
         .await
         .unwrap();
+
     let jon: Value = serde_json::from_str(&docket_res.text().await.unwrap()).unwrap();
     // the response comes in as an "initial" payload. rather than include that noise
     //  in our struct, leverage a custom serializer to get a
     let map: Map<String, Value> = jon.as_object().unwrap().clone();
     if !map.contains_key("initial") {
+        return Err(AppStoreAPIError::MissingAppData);
+    }
+    let initial: Value = serde_json::to_value(map.get("initial").unwrap()).unwrap();
+    let desks: Map<String, Value> = serde_json::from_value(initial).unwrap();
+
+    return Ok(desks);
+}
+
+// combine scries across various agents to create one unified payload capable of driving the entire
+//  Realm desktop grid
+pub async fn get_app_detail(
+    ship_interface: ShipInterface,
+    desk: &str,
+) -> Result<Map<String, Value>> {
+    let docket_res = ship_interface
+        .scry("docket", "/charges", "json")
+        .await
+        .unwrap();
+
+    let jon: Value = serde_json::from_str(&docket_res.text().await.unwrap()).unwrap();
+    // the response comes in as an "initial" payload. rather than include that noise
+    //  in our struct, leverage a custom serializer to get a
+    let map: Map<String, Value> = jon.as_object().unwrap().clone();
+    if !map.contains_key("initial") {
+        return Err(AppStoreAPIError::MissingAppData);
+    }
+    let initial: Value = serde_json::to_value(map.get("initial").unwrap()).unwrap();
+    let desks: Map<String, Value> = serde_json::from_value(initial).unwrap();
+    if !desks.contains_key(desk) {
         return Err(AppStoreAPIError::AppNotFound);
     }
-    let mut desk: Option<Map<String, Value>> = None;
-    let desks: Map<String, Value> = serde_json::from_value(*map.get("initial").unwrap()).unwrap();
-    if !desks.contains_key(desk) {
-        desk = serde_json::from_value(*map.get(desk).unwrap()).unwrap();
-    }
-    return Ok(desk);
-    //let users: Vec<Docket> = response.json::<Docket>().await?;
-    // println!("{:?}", users);
+    // borrow the desk from the desks map
+    let app: Value = serde_json::to_value(desks.get(desk).unwrap()).unwrap();
+    return Ok(serde_json::from_value(app).unwrap());
 }
