@@ -1,3 +1,4 @@
+use serde::Deserialize;
 use serde_json::{Map, Value};
 
 use crate::ShipInterface;
@@ -6,6 +7,11 @@ use reqwest::Error as ReqError;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, AppStoreAPIError>;
+
+#[derive(Deserialize)]
+struct Response {
+    initial: Map<String, Value>,
+}
 
 #[derive(Error, Debug)]
 pub enum AppStoreAPIError {
@@ -95,7 +101,7 @@ pub async fn get_app_detail(
         .scry("docket", "/charges", "json")
         .await
         .unwrap();
-    let jon: Value = serde_json::from_str(docket_res.text().await.unwrap())?;
+    let jon: Value = serde_json::from_str(&docket_res.text().await.unwrap()).unwrap();
     // the response comes in as an "initial" payload. rather than include that noise
     //  in our struct, leverage a custom serializer to get a
     let map: Map<String, Value> = jon.as_object().unwrap().clone();
@@ -103,9 +109,9 @@ pub async fn get_app_detail(
         return Err(AppStoreAPIError::AppNotFound);
     }
     let mut desk: Option<Map<String, Value>> = None;
-    let desks: Map<String, Value> = map.get("initial").unwrap();
+    let desks: Map<String, Value> = serde_json::from_value(*map.get("initial").unwrap()).unwrap();
     if !desks.contains_key(desk) {
-        desk = map.get(desk).unwrap();
+        desk = serde_json::from_value(*map.get(desk).unwrap()).unwrap();
     }
     return Ok(desk);
     //let users: Vec<Docket> = response.json::<Docket>().await?;

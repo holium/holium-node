@@ -2064,6 +2064,7 @@ dependencies = [
  "json",
  "rand",
  "reqwest 0.11.18",
+ "serde",
  "serde_json",
  "thiserror",
  "tokio 1.28.1",
