@@ -266,11 +266,16 @@ pub async fn handle_message(
                 "peer_id": peer_id.clone(),
                 "room": room.clone(),
             });
-            for peer_id in room.present.iter() {
-                if let Some((_, sender, _)) = peers.get(peer_id) {
-                    sender.send(Message::text(message.to_string())).unwrap()
-                }
+            // FIX this
+            // send update to all known peers
+            for (_, (_, sender, _)) in peers.iter() {
+                sender.send(Message::text(message.to_string())).unwrap()
             }
+            // for peer_id in room.present.iter() {
+            //     if let Some((_, sender, _)) = peers.get(peer_id) {
+            //         sender.send(Message::text(message.to_string())).unwrap()
+            //     }
+            // }
         }
         "signal" => {
             // signal_type - webrtc: offer, answer, candidate, renegotiate, transceiverRequest, transceiverAnswer, transceiverIce, transceiverClose
@@ -298,6 +303,7 @@ pub async fn handle_message(
             if let Some((_, sender, _)) = peers.get(&to) {
                 let message = json!({
                     "type": "signal",
+                    "rid": rid.clone(),
                     "from": from,
                     "signal": signal,
                 });

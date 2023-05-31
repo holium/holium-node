@@ -48,7 +48,7 @@ function App() {
     const getMedia = async () => {
       if (!videoRef.current) return;
       try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         // const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         if(videoRef.current) {
           videoRef.current.srcObject = mediaStream;
@@ -191,7 +191,7 @@ function App() {
   };
 
   const createRoom = (roomName) => {
-    socketRef.current.send(serialize({ type: 'create-room', rid: `${username}/${roomName}`, title: roomName }));
+    socketRef.current.send(serialize({ type: 'create-room', rid: `${username}/${roomName}`, title: roomName, path: '/~lomder-librun/realm-forerunners' }));
   };
 
   const deleteRoom = (rid) => {
@@ -231,6 +231,7 @@ function App() {
 
     peer.on('signal', (signal) => {
       const msg = { type: "signal", rid: currentRoomRef.current.rid, signal, to: peerId, from: username }
+      console.log('signaling', msg)
       socketRef.current.send(serialize(msg))
     })
   
@@ -295,8 +296,11 @@ function App() {
         const peers = response.room.present.filter((user) => user !== username);
         peers.forEach((peerId) => {
           const initiator = isInitiatorCheck(username, peerId);
-          const peer = createPeer(peerId, initiator, streamRef.current);
-          peersRef.current[peerId] = peer;
+          // if peer already exists, don't create a new one
+          if (!peersRef.current[peerId]) {
+            const peer = createPeer(peerId, initiator, streamRef.current);
+            peersRef.current[peerId] = peer;
+          }
         });
         
         break;
@@ -439,7 +443,7 @@ function App() {
           </div>
         </div>
         <div id="our-video">
-          <video style={{width: 400}} ref={videoRef} autoPlay playsInline />
+          <video style={{width: 400}} ref={videoRef} autoPlay playsInline muted />
         </div>
         <div className="peers">{currentRoom && currentRoom.present.map((peer) => {
           let callbutton = null;
