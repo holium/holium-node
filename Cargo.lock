@@ -2067,6 +2067,7 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio 1.28.1",
+ "warp",
 ]
 
 [[package]]

@@ -50,12 +50,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let signaling_route = rooms::socket::signaling_route();
     let proxy = reverse_proxy_filter("".to_string(), http_server_url);
 
+    let app_store_routes = urbit_api::apps::api::app_store_routes(ship_interface);
+
     warp::path::full().map(|path: warp::path::FullPath| {
         println!("Incoming request at path: {}", path.as_str());
     });
 
     // let routes = rooms_route.or(proxy);
-    let routes = rooms_route.or(signaling_route).or(proxy);
+    let routes = rooms_route
+        .or(signaling_route)
+        .or(proxy)
+        .or(app_store_routes);
 
     warp::serve(routes).run(([0, 0, 0, 0], opt.node_port)).await;
 
