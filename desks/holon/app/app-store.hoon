@@ -117,7 +117,7 @@
         ['source_ship' ?~(sink ~ s+(crip "{<her.u.sink>}"))]
         ['source_desk' ?~(sink ~ s+sud.u.sink)]
         ['source_aeon' ?~(sink ~ s+(crip "{<let.u.sink>}"))]
-        ['kids_desk' ?~(sink ~ ?~(kid.u.sink ~ s+(crip "{<u.kid.u.sink>}")))]
+        ['kids_desk' ?~(sink ~ ?~(kid.u.sink ~ s+u.kid.u.sink))]
         ['pending_updates' ?~(upd ~ s+(crip "{<upd>}"))]
     ==
     ?>  ?=([%initial *] dockets.prep)
