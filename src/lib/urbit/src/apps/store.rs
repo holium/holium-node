@@ -87,18 +87,12 @@ pub struct AppDetail {
 }
 
 pub async fn get_apps(ship_interface: ShipInterface) -> Result<Map<String, Value>> {
-    let apps_res = ship_interface.scry("holon", "/apps", "json").await.unwrap();
+    let apps_res = ship_interface
+        .scry("app-store", "/apps", "json")
+        .await
+        .unwrap();
     let jon: Value = serde_json::from_str(&apps_res.text().await.unwrap()).unwrap();
-    // the response comes in as an "initial" payload. rather than include that noise
-    //  in our struct, leverage a custom serializer to get a
-    let map: Map<String, Value> = jon.as_object().unwrap().clone();
-    if !map.contains_key("initial") {
-        return Err(AppStoreAPIError::MissingAppData);
-    }
-    let initial: Value = serde_json::to_value(map.get("initial").unwrap()).unwrap();
-    let desks: Map<String, Value> = serde_json::from_value(initial).unwrap();
-
-    return Ok(desks);
+    return Ok(jon.as_object().unwrap().clone());
 }
 
 // combine scries across various agents to create one unified payload capable of driving the entire
@@ -108,20 +102,24 @@ pub async fn get_app_detail(
     desk: &str,
 ) -> Result<Map<String, Value>> {
     let path: String = format!("/apps/{desk}");
-    let app_res = ship_interface.scry("holon", &path, "json").await.unwrap();
+    let app_res = ship_interface
+        .scry("app-store", &path, "json")
+        .await
+        .unwrap();
     let jon: Value = serde_json::from_str(&app_res.text().await.unwrap()).unwrap();
+    return Ok(jon.as_object().unwrap().clone());
     // the response comes in as an "initial" payload. rather than include that noise
     //  in our struct, leverage a custom serializer to get a
-    let map: Map<String, Value> = jon.as_object().unwrap().clone();
-    if !map.contains_key("initial") {
-        return Err(AppStoreAPIError::MissingAppData);
-    }
-    let initial: Value = serde_json::to_value(map.get("initial").unwrap()).unwrap();
-    let desks: Map<String, Value> = serde_json::from_value(initial).unwrap();
-    if !desks.contains_key(desk) {
-        return Err(AppStoreAPIError::AppNotFound);
-    }
-    // borrow the desk from the desks map
-    let app: Value = serde_json::to_value(desks.get(desk).unwrap()).unwrap();
-    return Ok(serde_json::from_value(app).unwrap());
+    // let map: Map<String, Value> = jon.as_object().unwrap().clone();
+    // if !map.contains_key("initial") {
+    //     return Err(AppStoreAPIError::MissingAppData);
+    // }
+    // let initial: Value = serde_json::to_value(map.get("initial").unwrap()).unwrap();
+    // let desks: Map<String, Value> = serde_json::from_value(initial).unwrap();
+    // if !desks.contains_key(desk) {
+    //     return Err(AppStoreAPIError::AppNotFound);
+    // }
+    // // borrow the desk from the desks map
+    // let app: Value = serde_json::to_value(desks.get(desk).unwrap()).unwrap();
+    // return Ok(serde_json::from_value(app).unwrap());
 }
