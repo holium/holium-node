@@ -1,4 +1,4 @@
-// use serde::{Default, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 use crate::ShipInterface;
@@ -38,70 +38,70 @@ pub enum AppStoreAPIError {
 //     pub desk: String,
 // }
 
-// #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-// #[serde(rename_all = "camelCase")]
-// pub enum AppStatus {
-//     // active and running
-//     Running,
-//     Suspended,
-//     #[default]
-//     Unknown,
-// }
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AppStatus {
+    // active and running
+    Running,
+    Suspended,
+    #[default]
+    Unknown,
+}
 
-// #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-// #[serde(rename_all = "camelCase")]
-// pub enum UpdateStatus {
-//     // receive updates via commits on the local ship
-//     Local,
-//     // receive updates from the source ship
-//     Tracking,
-//     // do not receive updates
-//     Paused,
-//     #[default]
-//     Unknown,
-// }
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum UpdateStatus {
+    // receive updates via commits on the local ship
+    Local,
+    // receive updates from the source ship
+    Tracking,
+    // do not receive updates
+    Paused,
+    #[default]
+    Unknown,
+}
 
-// //
-// #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
-// #[serde(rename_all = "camelCase")]
-// pub struct AppDetail {
-//     // Universal resource identifier as a string of the form: '<ship>/<desk>'
-//     pub uri: String,
-//     // Ship name (parsed from uri)
-//     pub ship_name: String,
-//     // Desk name (parsed from uri)
-//     pub app_name: String,
-//     // Kelvin supported versions
-//     pub sys_kelvin: Vec<String>,
-//     // base hash ends in
-//     pub base_hash: String,
-//     // %cz hash ends in
-//     pub cz_hash: String,
-//     // app status as reported by +vats interface
-//     pub app_status: AppStatus,
-//     // original publishing ship
-//     pub publishing_ship: String,
-//     // updates status
-//     pub updates: UpdateStatus,
-//     // the desk on the source ship
-//     pub source_desk: String,
-//     // The revision number of the desk on the source ship
-//     pub source_aeon: String,
-//     // Updates waiting to be applied due to incompatibility
-//     pub pending_updates: Vec<String>,
-//     //
-//     // docket info
-//     //
-//     // pub image: String,
-//     // pub title: String,
-//     // pub license: String,
-//     // pub version: String,
-//     // pub website: String,
-//     // pub href: Href,
-//     // pub chad: Chad,
-//     // pub color: String,
-//     // pub info: String,
-// }
+//
+#[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppDetail {
+    // Universal resource identifier as a string of the form: '<ship>/<desk>'
+    pub uri: String,
+    // Ship name (parsed from uri)
+    pub ship_name: String,
+    // Desk name (parsed from uri)
+    pub app_name: String,
+    // Kelvin supported versions
+    pub sys_kelvin: Vec<String>,
+    // base hash ends in
+    pub base_hash: String,
+    // %cz hash ends in
+    pub cz_hash: String,
+    // app status as reported by +vats interface
+    pub app_status: AppStatus,
+    // // original publishing ship
+    // pub publishing_ship: String,
+    // // updates status
+    // pub updates: UpdateStatus,
+    // // the desk on the source ship
+    // pub source_desk: String,
+    // // The revision number of the desk on the source ship
+    // pub source_aeon: String,
+    // Updates waiting to be applied due to incompatibility
+    pub pending_updates: Vec<String>,
+    //
+    // docket info
+    //
+    // pub image: String,
+    // pub title: String,
+    // pub license: String,
+    // pub version: String,
+    // pub website: String,
+    // pub href: Href,
+    // pub chad: Chad,
+    // pub color: String,
+    // pub info: String,
+}
 
 pub async fn get_apps(ship_interface: ShipInterface) -> Result<Map<String, Value>> {
     let docket_res = ship_interface
