@@ -14,6 +14,11 @@
     :: ~/scry/app-store/apps
     [%x %apps ~]
       ``json+!>((apps-js (report-prep our.bowl now.bowl)))
+
+    :: ~/scry/app-store/apps/<desk>
+    [%x %apps @ ~]
+      =/  =desk  i.t.t.path
+      ``json+!>((vat-js (report-prep our.bowl now.bowl) our.bowl now.bowl desk))
   ==
   ::
   ++  report-prep
