@@ -7,11 +7,7 @@ use reqwest::Error as ReqError;
 use thiserror::Error;
 
 pub type Result<T> = std::result::Result<T, AppStoreAPIError>;
-
-// #[derive(Deserialize)]
-// struct Response {
-//     initial: Map<String, Value>,
-// }
+pub type AppListing = Map<String, AppDetail>;
 
 #[derive(Error, Debug)]
 pub enum AppStoreAPIError {
@@ -27,22 +23,13 @@ pub enum AppStoreAPIError {
     ReqwestError(#[from] ReqError),
 }
 
-// // to truly uniquely identify apps on the Urbit network, you need the "fully qualified path";
-// //  or the a string of the form: "<ship>/<desk>"
-// pub struct AppURI {
-//     // name of ship where app was either originally downloaded, or the ship from
-//     //  which app udpates should be installed. assuming here that the UI will allow for
-//     //  changing the host ship of any app
-//     pub ship_name: String,
-//     // name of the desk (e.g. realm, base, garden, landscape, et. al.)
-//     pub desk: String,
-// }
-
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum AppStatus {
     // active and running
+    #[serde(rename = "running")]
     Running,
+    #[serde(rename = "suspended")]
     Suspended,
     #[default]
     Unknown,
@@ -52,8 +39,10 @@ pub enum AppStatus {
 #[serde(rename_all = "camelCase")]
 pub enum UpdateStatus {
     // receive updates via commits on the local ship
+    #[serde(rename = "local")]
     Local,
     // receive updates from the source ship
+    #[serde(rename = "remote")]
     Tracking,
     // do not receive updates
     Paused,
@@ -61,46 +50,40 @@ pub enum UpdateStatus {
     Unknown,
 }
 
+pub type Glob = Map<String, Value>;
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Href {
+    pub glob: Glob,
+    pub base: String,
+}
+
 //
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AppDetail {
-    // Universal resource identifier as a string of the form: '<ship>/<desk>'
-    pub uri: String,
-    // Ship name (parsed from uri)
-    pub ship_name: String,
-    // Desk name (parsed from uri)
-    pub app_name: String,
-    // Kelvin supported versions
-    pub sys_kelvin: Vec<String>,
-    // base hash ends in
+    pub status: AppStatus,
+    pub image: String,
+    #[serde(default)]
+    pub kids_desk: Value,
+    pub title: String,
+    #[serde(default)]
+    pub pending_updates: Value,
+    pub license: String,
+    pub version: String,
+    pub publishing_ship: String,
+    pub source_desk: String,
+    pub sys_kelvin: Vec<i64>,
+    pub website: String,
     pub base_hash: String,
-    // %cz hash ends in
-    pub cz_hash: String,
-    // app status as reported by +vats interface
-    pub app_status: AppStatus,
-    // // original publishing ship
-    // pub publishing_ship: String,
-    // // updates status
-    // pub updates: UpdateStatus,
-    // // the desk on the source ship
-    // pub source_desk: String,
-    // // The revision number of the desk on the source ship
-    // pub source_aeon: String,
-    // Updates waiting to be applied due to incompatibility
-    pub pending_updates: Vec<String>,
-    //
-    // docket info
-    //
-    // pub image: String,
-    // pub title: String,
-    // pub license: String,
-    // pub version: String,
-    // pub website: String,
-    // pub href: Href,
-    // pub chad: Chad,
-    // pub color: String,
-    // pub info: String,
+    pub desk_hash: String,
+    pub href: Option<Href>,
+    pub type_: String,
+    pub source_ship: String,
+    pub updates: UpdateStatus,
+    pub source_aeon: String,
+    pub color: String,
+    pub info: String,
 }
 
 pub async fn get_apps(ship_interface: ShipInterface) -> Result<Map<String, Value>> {
