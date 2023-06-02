@@ -20,6 +20,10 @@ pub struct HolAPI {
     // the port for the Holium node
     #[structopt(long = "node-port", default_value = "3030")]
     pub node_port: u16,
+
+    // build the globs store from the ships in the app_hosts table
+    #[structopt(long = "init-globs")]
+    pub init_globs: bool,
 }
 
 #[tokio::main]
@@ -50,6 +54,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let signaling_route = rooms::socket::signaling_route();
     let proxy = reverse_proxy_filter("".to_string(), http_server_url);
 
+    // initialize the glob store (sql lite db) sourced from ships located
+    //  in the app_hosts table
+    if opt.init_globs {
+        urbit_api::apps::store::init(ship_interface.clone()).await?;
+    }
     let app_store_routes = urbit_api::apps::routes::app_store_routes(ship_interface);
 
     warp::path::full().map(|path: warp::path::FullPath| {
