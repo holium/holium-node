@@ -39,7 +39,6 @@
     =,  enjs:format
     |=  [prep=apps-view-prep:store]
     ^-  json
-    %+  frond  %apps
     %-  pairs
     %+  turn
       %+  sort

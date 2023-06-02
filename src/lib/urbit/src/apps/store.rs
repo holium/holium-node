@@ -104,12 +104,8 @@ pub struct AppDetail {
 }
 
 pub async fn get_apps(ship_interface: ShipInterface) -> Result<Map<String, Value>> {
-    let docket_res = ship_interface
-        .scry("docket", "/charges", "json")
-        .await
-        .unwrap();
-
-    let jon: Value = serde_json::from_str(&docket_res.text().await.unwrap()).unwrap();
+    let apps_res = ship_interface.scry("holon", "/apps", "json").await.unwrap();
+    let jon: Value = serde_json::from_str(&apps_res.text().await.unwrap()).unwrap();
     // the response comes in as an "initial" payload. rather than include that noise
     //  in our struct, leverage a custom serializer to get a
     let map: Map<String, Value> = jon.as_object().unwrap().clone();
@@ -128,12 +124,9 @@ pub async fn get_app_detail(
     ship_interface: ShipInterface,
     desk: &str,
 ) -> Result<Map<String, Value>> {
-    let docket_res = ship_interface
-        .scry("docket", "/charges", "json")
-        .await
-        .unwrap();
-
-    let jon: Value = serde_json::from_str(&docket_res.text().await.unwrap()).unwrap();
+    let path: String = format!("/apps/{desk}");
+    let app_res = ship_interface.scry("holon", &path, "json").await.unwrap();
+    let jon: Value = serde_json::from_str(&app_res.text().await.unwrap()).unwrap();
     // the response comes in as an "initial" payload. rather than include that noise
     //  in our struct, leverage a custom serializer to get a
     let map: Map<String, Value> = jon.as_object().unwrap().clone();
