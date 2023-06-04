@@ -48,7 +48,7 @@ function App() {
     const getMedia = async () => {
       if (!videoRef.current) return;
       try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
         // const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
         if(videoRef.current) {
           videoRef.current.srcObject = mediaStream;
@@ -231,7 +231,6 @@ function App() {
 
     peer.on('signal', (signal) => {
       const msg = { type: "signal", rid: currentRoomRef.current.rid, signal, to: peerId, from: username }
-      console.log('signaling', msg)
       socketRef.current.send(serialize(msg))
     })
   

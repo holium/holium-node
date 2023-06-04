@@ -88,8 +88,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .untuple_one();
 
     let proxy = reverse_proxy_filter("".to_string(), http_server_url);
+    let login_route = warp::path!("~" / "login" / ..).and(reverse_proxy_filter(
+        "".to_string(),
+        format!("http://localhost:{}/~/login/", opt.urbit_port.clone()),
+    ));
 
-    let routes = rooms_route.or(signaling_route).or(header_check.and(proxy));
+    let routes = rooms_route
+        .or(signaling_route)
+        .or(login_route)
+        .or(header_check.and(proxy));
 
     warp::serve(routes).run(([0, 0, 0, 0], opt.node_port)).await;
 
