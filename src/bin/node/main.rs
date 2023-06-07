@@ -1,7 +1,7 @@
 mod helpers;
+use std::convert::Infallible;
 use std::sync::Arc;
-
-use warp::{reject, Filter};
+use warp::{http::Uri, reject, Filter, Rejection, Reply};
 
 use structopt::StructOpt;
 use urbit_api::ShipInterface;
@@ -50,53 +50,20 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
 
-    // check for a valid header on ship requests
-    let header_check = warp::header::<String>("Cookie")
-        .and_then({
-            move |cookie: String| {
-                let ship_interface = Arc::clone(&ship_interface);
-                // split the first ; and take the first part
-                let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();
-                async move {
-                    let scry_res = ship_interface
-                        .scry(
-                            "holon",
-                            format!("/valid-cookie/{}", cookie).as_str(),
-                            "json",
-                        )
-                        .await
-                        .unwrap();
-
-                    let is_valid = scry_res
-                        .json::<serde_json::Value>()
-                        .await
-                        .unwrap()
-                        .get("is-valid")
-                        .unwrap()
-                        .as_bool()
-                        .unwrap();
-
-                    if is_valid {
-                        // continue to the proxy
-                        Ok(())
-                    } else {
-                        Err(reject::custom(Unauthorized))
-                    }
-                }
-            }
-        })
-        .untuple_one();
-
     let proxy = reverse_proxy_filter("".to_string(), http_server_url);
     let login_route = warp::path!("~" / "login" / ..).and(reverse_proxy_filter(
         "".to_string(),
         format!("http://localhost:{}/~/login/", opt.urbit_port.clone()),
     ));
 
-    let routes = rooms_route
-        .or(signaling_route)
-        .or(login_route)
-        .or(header_check.and(proxy));
+    let routes = rooms_route.or(signaling_route).or(login_route);
+
+    let cookie_exists = warp::header::<String>("Cookie").recover(handle_unauthorized);
+
+    let routes = routes
+        .or(cookie_exists)
+        .or(check_cookie(ship_interface).and(proxy))
+        .recover(handle_unauthorized);
 
     warp::serve(routes).run(([0, 0, 0, 0], opt.node_port)).await;
 
@@ -107,3 +74,64 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 struct Unauthorized;
 
 impl reject::Reject for Unauthorized {}
+
+pub async fn handle_unauthorized(reject: Rejection) -> Result<impl Reply, Rejection> {
+    print!("reject: {:?}", reject);
+    if reject.is_not_found() {
+        Ok(warp::redirect(Uri::from_static("/~/login?redirect=/")))
+    } else if reject.find::<warp::reject::MissingHeader>().is_some() {
+        Ok(warp::redirect(Uri::from_static("/~/login?redirect=/")))
+    } else if reject.find::<Unauthorized>().is_some() {
+        Ok(warp::redirect(Uri::from_static("/~/login?redirect=/")))
+    } else {
+        Err(reject)
+    }
+}
+
+fn check_cookie(
+    ship_interface: Arc<ShipInterface>,
+) -> impl Filter<Extract = (), Error = Rejection> + Clone {
+    warp::any()
+        .and(with_ship_interface(ship_interface))
+        .and(warp::header::<String>("Cookie"))
+        .and_then(
+            move |ship_interface: Arc<ShipInterface>, cookie: String| async move {
+                println!("testing cookie: {}", cookie);
+                // let ship_interface = Arc::clone(&ship_interface);
+                let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();
+                let scry_res = ship_interface
+                    .scry(
+                        "holon",
+                        format!("/valid-cookie/{}", cookie).as_str(),
+                        "json",
+                    )
+                    .await
+                    .unwrap();
+
+                let is_valid = scry_res
+                    .json::<serde_json::Value>()
+                    .await
+                    .unwrap()
+                    .get("is-valid")
+                    .unwrap()
+                    .as_bool()
+                    .unwrap();
+
+                if is_valid {
+                    // continue to the proxy
+                    Ok(())
+                } else {
+                    Err(reject::custom(Unauthorized))
+                }
+            },
+        )
+        .untuple_one()
+
+    // .untuple_one();
+}
+
+fn with_ship_interface(
+    ship_interface: Arc<ShipInterface>,
+) -> impl Filter<Extract = (Arc<ShipInterface>,), Error = Infallible> + Clone {
+    warp::any().map(move || ship_interface.clone())
+}
