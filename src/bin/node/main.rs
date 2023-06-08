@@ -1,17 +1,13 @@
 mod helpers;
 use std::convert::Infallible;
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use warp::{http::Uri, reject, Filter, Rejection, Reply};
 
 use structopt::StructOpt;
-use urbit_api::ShipInterface;
+use urbit_api::SafeShipInterface;
 
 use warp_reverse_proxy::reverse_proxy_filter;
 
 use crate::helpers::wait_for_server;
-
-pub type ShipAPI = Arc<Mutex<ShipInterface>>;
 
 #[derive(StructOpt)]
 pub struct HolAPI {
@@ -41,19 +37,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let http_server_url = format!("http://localhost:{}", opt.urbit_port.clone());
 
     // set static ship_interface
-    let ship_interface: ShipAPI = Arc::new(Mutex::new(
-        ShipInterface::new(http_server_url.as_str(), access_code.trim())
+    let ship_interface: SafeShipInterface =
+        SafeShipInterface::new(http_server_url.as_str(), access_code.trim())
             .await
-            .expect("Could not create ship interface"),
-    ));
+            .expect("Could not create ship interface");
 
-    let scry_res = ship_interface
-        .lock()
-        .await
-        .scry("docket", "/our", "json")
-        .await
-        .unwrap();
-    println!("test_scry: {}", scry_res.text().await.unwrap());
+    let scry_res = ship_interface.scry("docket", "/our", "json").await;
+    match scry_res {
+        Ok(_) => println!("test_scry: {}", scry_res.unwrap().to_string()),
+        Err(e) => println!("scry failed: {}", e),
+    }
 
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
@@ -80,6 +73,11 @@ struct Unauthorized;
 
 impl reject::Reject for Unauthorized {}
 
+#[derive(Debug)]
+struct ServerError;
+
+impl reject::Reject for ServerError {}
+
 pub async fn handle_unauthorized(reject: Rejection) -> Result<impl Reply, Rejection> {
     print!("reject: {:?}", reject);
     if reject.is_not_found() {
@@ -93,73 +91,78 @@ pub async fn handle_unauthorized(reject: Rejection) -> Result<impl Reply, Reject
     }
 }
 
-fn check_cookie(ship_interface: ShipAPI) -> impl Filter<Extract = (), Error = Rejection> + Clone {
+fn check_cookie(
+    ship_interface: SafeShipInterface,
+) -> impl Filter<Extract = (), Error = Rejection> + Clone {
     warp::any()
         .and(with_ship_interface(ship_interface))
         .and(warp::header::<String>("Cookie"))
-        .and_then(move |ship_interface: ShipAPI, cookie: String| async move {
-            println!("testing cookie: {}", cookie);
-            let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();
-            let guard = ship_interface.lock().await;
-            let jon = guard
-                .scry(
-                    "holon",
-                    format!("/valid-cookie/{}", cookie).as_str(),
-                    "json",
-                )
-                .await;
-            drop(guard);
-            let jon = match jon {
-                Ok(scry_res) => {
-                    if scry_res.status().as_u16() == 200 {
-                        Ok(scry_res.json::<serde_json::Value>().await.unwrap())
+        .and_then(
+            move |ship_interface: SafeShipInterface, cookie: String| async move {
+                println!("testing cookie: {}", cookie);
+                let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();
+                let res = ship_interface
+                    .scry(
+                        "holon",
+                        format!("/valid-cookie/{}", cookie).as_str(),
+                        "json",
+                    )
+                    .await;
+                if res.is_ok() {
+                    let is_valid = res
+                        .unwrap()
+                        .as_object()
+                        .unwrap()
+                        .get("is-valid")
+                        .unwrap()
+                        .as_bool()
+                        .unwrap();
+                    if is_valid {
+                        return Ok(());
                     } else {
-                        println!("new_session");
-                        let mut guard = ship_interface.lock().await;
-                        let ship_interface = guard.refresh().await;
-                        drop(guard);
-                        if ship_interface.is_err() {
-                            println!("api error");
-                            return Err(reject::custom(Unauthorized));
+                        return Err(reject::custom(Unauthorized));
+                    }
+                } else {
+                    match res.err().unwrap() {
+                        urbit_api::error::UrbitAPIError::Forbidden => {
+                            let res = ship_interface.refresh().await;
+                            if res.is_err() {
+                                return Err(reject::custom(ServerError));
+                            }
+                            let res = ship_interface
+                                .scry(
+                                    "holon",
+                                    format!("/valid-cookie/{}", cookie).as_str(),
+                                    "json",
+                                )
+                                .await;
+                            if res.is_err() {
+                                return Err(reject::custom(ServerError));
+                            }
+                            let is_valid = res
+                                .unwrap()
+                                .as_object()
+                                .unwrap()
+                                .get("is-valid")
+                                .unwrap()
+                                .as_bool()
+                                .unwrap();
+                            if is_valid {
+                                return Ok(());
+                            } else {
+                                return Err(reject::custom(Unauthorized));
+                            }
                         }
-                        let scry_res = ship_interface
-                            .unwrap()
-                            .scry(
-                                "holon",
-                                format!("/valid-cookie/{}", cookie).as_str(),
-                                "json",
-                            )
-                            .await
-                            .unwrap();
-                        if scry_res.status().as_u16() == 200 {
-                            println!("success");
-                            Ok(scry_res.json::<serde_json::Value>().await.unwrap())
-                        } else {
-                            println!("error");
-                            Err(reject::custom(Unauthorized))
-                        }
+                        _ => return Err(reject::custom(ServerError)),
                     }
                 }
-                Err(err) => {
-                    println!("err: {}", err);
-                    Err(reject::custom(Unauthorized))
-                }
-            };
-
-            let is_valid = jon.unwrap().get("is-valid").unwrap().as_bool().unwrap();
-
-            if is_valid {
-                // continue to the proxy
-                Ok(())
-            } else {
-                Err(reject::custom(Unauthorized))
-            }
-        })
+            },
+        )
         .untuple_one()
 }
 
 fn with_ship_interface(
-    ship_interface: ShipAPI,
-) -> impl Filter<Extract = (ShipAPI,), Error = Infallible> + Clone {
-    warp::any().map(move || Arc::clone(&ship_interface))
+    ship_interface: SafeShipInterface,
+) -> impl Filter<Extract = (SafeShipInterface,), Error = Infallible> + Clone {
+    warp::any().map(move || ship_interface.clone())
 }

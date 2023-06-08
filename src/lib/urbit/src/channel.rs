@@ -96,7 +96,7 @@ impl Channel {
     }
 
     /// Sends a scry to the ship
-    pub async fn scry(&self, app: &str, path: &str, mark: &str) -> Result<Response> {
+    pub async fn scry(&self, app: &str, path: &str, mark: &str) -> Result<serde_json::Value> {
         self.ship_interface.scry(app, path, mark).await
     }
 

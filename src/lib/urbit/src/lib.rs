@@ -6,6 +6,7 @@ pub mod subscription;
 
 pub use channel::Channel;
 pub use helper::get_current_da_time;
+pub use interface::SafeShipInterface;
 pub use interface::ShipInterface;
 pub use subscription::Subscription;
 

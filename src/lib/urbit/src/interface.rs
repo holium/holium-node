@@ -1,3 +1,6 @@
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 use crate::error::{Result, UrbitAPIError};
 use json::JsonValue;
 
@@ -21,51 +24,60 @@ pub struct ShipInterface {
     ship_code: String,
 }
 
+#[derive(Debug, Clone)]
+pub struct SafeShipInterface {
+    api: Arc<Mutex<ShipInterface>>,
+}
+
+/*
+  Provide a thread-safe wrapper around the underlying ShipInterface
+*/
+impl SafeShipInterface {
+    pub async fn new(url: &str, code: &str) -> Result<SafeShipInterface> {
+        let api = ShipInterface::new(url, code).await?;
+        Ok(SafeShipInterface {
+            api: Arc::new(Mutex::new(api)),
+        })
+    }
+
+    pub async fn refresh(&self) -> Result<()> {
+        let mut api = self.api.lock().await;
+        api.refresh().await?;
+        Ok(())
+    }
+
+    pub async fn scry(&self, app: &str, path: &str, mark: &str) -> Result<serde_json::Value> {
+        let api = self.api.lock().await;
+        let res = api.scry(app, path, mark).await;
+        match res {
+            Ok(json) => Ok(json),
+            Err(e) => Err(e),
+        }
+    }
+}
+
 impl ShipInterface {
     /// Logs into the given ship and creates a new `ShipInterface`.
     /// `ship_url` should be `http://ip:port` of the given ship. Example:
     /// `http://0.0.0.0:8080`. `ship_code` is the code acquire from your ship
     /// by typing `+code` in dojo.
     pub async fn new(ship_url: &str, ship_code: &str) -> Result<ShipInterface> {
-        let client = Client::new();
-
-        let login_url = format!("{}/~/login", ship_url);
-        let resp = client
-            .post(&login_url)
-            .body("password=".to_string() + &ship_code)
-            .send()
-            .await?;
-
-        // Check for status code
-        if resp.status().as_u16() != 204 {
-            return Err(UrbitAPIError::FailedToLogin);
-        }
-
-        // Acquire the session auth header value
-        let session_auth = resp
-            .headers()
-            .get("set-cookie")
-            .ok_or(UrbitAPIError::FailedToLogin)?;
-
-        // Convert sessions auth to a string
-        let auth_string = session_auth
-            .to_str()
-            .map_err(|_| UrbitAPIError::FailedToLogin)?;
-
-        // Trim the auth string to acquire the ship name
-        let end_pos = auth_string.find('=').ok_or(UrbitAPIError::FailedToLogin)?;
-        let ship_name = &auth_string[9..end_pos];
-
-        Ok(ShipInterface {
+        let mut result = ShipInterface {
             url: ship_url.to_string(),
-            session_auth: session_auth.clone(),
-            ship_name: ship_name.to_string(),
-            req_client: client,
+            session_auth: HeaderValue::from_str("").unwrap(),
+            ship_name: "".to_string(),
+            req_client: Client::new(),
             ship_code: ship_code.to_string(),
-        })
+        };
+        match result.refresh().await {
+            Ok(_) => Ok(result),
+            Err(e) => {
+                return Err(e);
+            }
+        }
     }
 
-    pub async fn refresh(&mut self) -> Result<ShipInterface> {
+    pub async fn refresh(&mut self) -> Result<&ShipInterface> {
         let login_url = format!("{}/~/login", self.url);
         let resp = self
             .req_client
@@ -98,7 +110,7 @@ impl ShipInterface {
 
         self.ship_name = ship_name.to_string();
 
-        Ok(self.clone())
+        Ok(self)
     }
 
     /// Returns the ship name with a leading `~` (By default ship_name does not have one)
@@ -125,15 +137,26 @@ impl ShipInterface {
     }
 
     /// Sends a scry to the ship
-    pub async fn scry(&self, app: &str, path: &str, mark: &str) -> Result<Response> {
+    pub async fn scry(&self, app: &str, path: &str, mark: &str) -> Result<serde_json::Value> {
         let scry_url = format!("{}/~/scry/{}{}.{}", self.url, app, path, mark);
         let resp = self
             .req_client
             .get(&scry_url)
             .header(COOKIE, self.session_auth.clone())
             .header("Content-Type", "application/json");
-
-        Ok(resp.send().await?)
+        let result = resp.send().await?;
+        if result.status().as_u16() == 200 {
+            Ok(result.json::<serde_json::Value>().await?)
+        } else {
+            match result.status().as_u16() {
+                403 => Err(UrbitAPIError::Forbidden),
+                500 => Err(UrbitAPIError::ServerError),
+                _ => Err(UrbitAPIError::Other(format!(
+                    "unexpected error: {}",
+                    result.status().as_u16()
+                ))),
+            }
+        }
     }
 
     /// Run a thread via spider
