@@ -1,5 +1,6 @@
 use eventsource_threaded::event::Event;
-use json;
+// use json;
+use serde_json::{from_str, Value};
 
 // ID of the message that created a `Subscription`
 pub type CreationID = u64;
@@ -23,8 +24,8 @@ impl Subscription {
     /// Verifies if the id of the message id in the event matches thea
     /// `Subscription` `creation_id`.
     fn event_matches(&self, event: &Event) -> bool {
-        if let Some(json) = &json::parse(&event.data).ok() {
-            return self.creation_id.to_string() == json["id"].dump();
+        if let Some(json) = from_str::<Value>(&event.data).ok() {
+            return self.creation_id.to_string() == json["id"].to_string();
         }
         false
     }
@@ -34,9 +35,9 @@ impl Subscription {
     /// the length of the message list.
     pub fn add_to_message_list(&mut self, event: &Event) -> Option<u64> {
         if self.event_matches(&event) {
-            let json = &json::parse(&event.data).ok()?["json"];
+            let json = &from_str::<Value>(&event.data).ok()?["json"];
             if !json.is_null() {
-                self.message_list.push(json.dump());
+                self.message_list.push(json.to_string());
                 return Some(self.message_list.len() as u64);
             }
         }

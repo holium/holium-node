@@ -1,11 +1,11 @@
 use crate::error::{Result, UrbitAPIError};
 use eventsource_threaded::{EventSource, ReceiverSource};
 
-use json::{object, JsonValue};
 use rand::Rng;
 use reqwest::header::HeaderMap;
 use reqwest::Response;
 use reqwest::Url;
+use serde_json::{from_str, json, Value};
 use std::time::SystemTime;
 
 use crate::{subscription::CreationID, ShipInterface, Subscription};
@@ -44,15 +44,15 @@ impl Channel {
         // Channel url
         let channel_url = format!("{}/~/channel/{}", &ship_interface.url, uid);
         // Opening channel request json
-        let mut body = json::parse(r#"[]"#).unwrap();
-        body[0] = object! {
+        let mut body = from_str::<Value>(r#"[]"#).unwrap();
+        body[0] = json!({
                 "id": 1,
                 "action": "poke",
                 "ship": ship_interface.ship_name.clone(),
                 "app": "hood",
                 "mark": "helm-hi",
                 "json": "Opening channel",
-        };
+        });
 
         // Make the put request to create the channel.
         let resp = ship_interface.send_put_request(&channel_url, &body).await?;
@@ -60,7 +60,7 @@ impl Channel {
         if resp.status().as_u16() == 204 {
             // Create cookie header with the ship session auth val
             let mut headers = HeaderMap::new();
-            headers.append("cookie", ship_interface.session_auth.clone());
+            headers.append("cookie", ship_interface.session_auth.clone().unwrap());
             // Create the receiver
             let url_structured =
                 Url::parse(&channel_url).map_err(|_| UrbitAPIError::FailedToCreateNewChannel)?;
@@ -80,16 +80,16 @@ impl Channel {
     }
 
     /// Sends a poke over the channel
-    pub async fn poke(&mut self, app: &str, mark: &str, json: &JsonValue) -> Result<Response> {
-        let mut body = json::parse(r#"[]"#).unwrap();
-        body[0] = object! {
+    pub async fn poke(&mut self, app: &str, mark: &str, json: &Value) -> Result<Response> {
+        let mut body = from_str::<Value>(r#"[]"#).unwrap();
+        body[0] = json!({
                 "id": self.get_and_raise_message_id_count(),
                 "action": "poke",
                 "ship": self.ship_interface.ship_name.clone(),
                 "app": app,
                 "mark": mark,
                 "json": json.clone(),
-        };
+        });
 
         // Make the put request for the poke
         self.ship_interface.send_put_request(&self.url, &body).await
@@ -106,7 +106,7 @@ impl Channel {
         input_mark: &str,
         output_mark: &str,
         thread_name: &str,
-        body: &JsonValue,
+        body: &Value,
     ) -> Result<Response> {
         self.ship_interface
             .spider(input_mark, output_mark, thread_name, body)
@@ -119,14 +119,14 @@ impl Channel {
         // Saves the message id to be reused
         let creation_id = self.get_and_raise_message_id_count();
         // Create the json body
-        let mut body = json::parse(r#"[]"#).unwrap();
-        body[0] = object! {
+        let mut body = from_str::<Value>(r#"[]"#).unwrap();
+        body[0] = json!({
                 "id": creation_id,
                 "action": "subscribe",
                 "ship": self.ship_interface.ship_name.clone(),
                 "app": app.to_string(),
                 "path": path.to_string(),
-        };
+        });
 
         // Make the put request to create the channel.
         let resp = self
@@ -173,12 +173,12 @@ impl Channel {
                             // Using unwrap because `add_to_message_list`
                             // already does error checking.
                             let eid: u64 = event.id.unwrap().parse().unwrap();
-                            let mut json = json::parse(r#"[]"#).unwrap();
-                            json[0] = object! {
+                            let mut json = from_str::<Value>(r#"[]"#).unwrap();
+                            json[0] = json!({
                                 "id": self.message_id_count,
                                 "action": "ack",
                                 "event-id": eid,
-                            };
+                            });
                             self.message_id_count += 1;
                             let _ack_res = self.ship_interface.send_put_request(&self.url, &json);
                             break;
@@ -217,11 +217,11 @@ impl Channel {
 
     /// Deletes the channel
     pub fn delete_channel(&self) {
-        let mut json = json::parse(r#"[]"#).unwrap();
-        json[0] = object! {
+        let mut json = from_str::<Value>(r#"[]"#).unwrap();
+        json[0] = json!({
             "id": self.message_id_count,
             "action": "delete",
-        };
+        });
         let _res = self.ship_interface.send_put_request(&self.url, &json);
         std::mem::drop(self);
     }

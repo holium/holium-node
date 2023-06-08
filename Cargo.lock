@@ -2284,7 +2284,6 @@ version = "0.1.0"
 dependencies = [
  "eventsource-threaded",
  "futures",
- "json",
  "rand",
  "reqwest 0.11.18",
  "serde_json",
