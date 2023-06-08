@@ -79,7 +79,6 @@ struct ServerError;
 impl reject::Reject for ServerError {}
 
 pub async fn handle_unauthorized(reject: Rejection) -> Result<impl Reply, Rejection> {
-    print!("reject: {:?}", reject);
     if reject.is_not_found() {
         Ok(warp::redirect(Uri::from_static("/~/login?redirect=/")))
     } else if reject.find::<warp::reject::MissingHeader>().is_some() {
@@ -99,7 +98,6 @@ fn check_cookie(
         .and(warp::header::<String>("Cookie"))
         .and_then(
             move |ship_interface: SafeShipInterface, cookie: String| async move {
-                println!("testing cookie: {}", cookie);
                 let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();
                 let res = ship_interface
                     .scry(
