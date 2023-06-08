@@ -1,6 +1,7 @@
 mod helpers;
 use std::convert::Infallible;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 use warp::{http::Uri, reject, Filter, Rejection, Reply};
 
 use structopt::StructOpt;
@@ -9,6 +10,8 @@ use urbit_api::ShipInterface;
 use warp_reverse_proxy::reverse_proxy_filter;
 
 use crate::helpers::wait_for_server;
+
+pub type ShipAPI = Arc<Mutex<ShipInterface>>;
 
 #[derive(StructOpt)]
 pub struct HolAPI {
@@ -38,13 +41,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let http_server_url = format!("http://localhost:{}", opt.urbit_port.clone());
 
     // set static ship_interface
-    let ship_interface = Arc::new(
+    let ship_interface: ShipAPI = Arc::new(Mutex::new(
         ShipInterface::new(http_server_url.as_str(), access_code.trim())
             .await
             .expect("Could not create ship interface"),
-    );
+    ));
 
-    let scry_res = ship_interface.scry("docket", "/our", "json").await.unwrap();
+    let scry_res = ship_interface
+        .lock()
+        .await
+        .scry("docket", "/our", "json")
+        .await
+        .unwrap();
     println!("test_scry: {}", scry_res.text().await.unwrap());
 
     let rooms_route = rooms::api::rooms_route();
@@ -58,10 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let routes = rooms_route.or(signaling_route).or(login_route);
 
-    let cookie_exists = warp::header::<String>("Cookie").recover(handle_unauthorized);
-
     let routes = routes
-        .or(cookie_exists)
         .or(check_cookie(ship_interface).and(proxy))
         .recover(handle_unauthorized);
 
@@ -88,50 +93,73 @@ pub async fn handle_unauthorized(reject: Rejection) -> Result<impl Reply, Reject
     }
 }
 
-fn check_cookie(
-    ship_interface: Arc<ShipInterface>,
-) -> impl Filter<Extract = (), Error = Rejection> + Clone {
+fn check_cookie(ship_interface: ShipAPI) -> impl Filter<Extract = (), Error = Rejection> + Clone {
     warp::any()
         .and(with_ship_interface(ship_interface))
         .and(warp::header::<String>("Cookie"))
-        .and_then(
-            move |ship_interface: Arc<ShipInterface>, cookie: String| async move {
-                println!("testing cookie: {}", cookie);
-                // let ship_interface = Arc::clone(&ship_interface);
-                let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();
-                let scry_res = ship_interface
-                    .scry(
-                        "holon",
-                        format!("/valid-cookie/{}", cookie).as_str(),
-                        "json",
-                    )
-                    .await
-                    .unwrap();
-
-                let is_valid = scry_res
-                    .json::<serde_json::Value>()
-                    .await
-                    .unwrap()
-                    .get("is-valid")
-                    .unwrap()
-                    .as_bool()
-                    .unwrap();
-
-                if is_valid {
-                    // continue to the proxy
-                    Ok(())
-                } else {
+        .and_then(move |ship_interface: ShipAPI, cookie: String| async move {
+            println!("testing cookie: {}", cookie);
+            let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();
+            let guard = ship_interface.lock().await;
+            let jon = guard
+                .scry(
+                    "holon",
+                    format!("/valid-cookie/{}", cookie).as_str(),
+                    "json",
+                )
+                .await;
+            drop(guard);
+            let jon = match jon {
+                Ok(scry_res) => {
+                    if scry_res.status().as_u16() == 200 {
+                        Ok(scry_res.json::<serde_json::Value>().await.unwrap())
+                    } else {
+                        println!("new_session");
+                        let mut guard = ship_interface.lock().await;
+                        let ship_interface = guard.refresh().await;
+                        drop(guard);
+                        if ship_interface.is_err() {
+                            println!("api error");
+                            return Err(reject::custom(Unauthorized));
+                        }
+                        let scry_res = ship_interface
+                            .unwrap()
+                            .scry(
+                                "holon",
+                                format!("/valid-cookie/{}", cookie).as_str(),
+                                "json",
+                            )
+                            .await
+                            .unwrap();
+                        if scry_res.status().as_u16() == 200 {
+                            println!("success");
+                            Ok(scry_res.json::<serde_json::Value>().await.unwrap())
+                        } else {
+                            println!("error");
+                            Err(reject::custom(Unauthorized))
+                        }
+                    }
+                }
+                Err(err) => {
+                    println!("err: {}", err);
                     Err(reject::custom(Unauthorized))
                 }
-            },
-        )
-        .untuple_one()
+            };
 
-    // .untuple_one();
+            let is_valid = jon.unwrap().get("is-valid").unwrap().as_bool().unwrap();
+
+            if is_valid {
+                // continue to the proxy
+                Ok(())
+            } else {
+                Err(reject::custom(Unauthorized))
+            }
+        })
+        .untuple_one()
 }
 
 fn with_ship_interface(
-    ship_interface: Arc<ShipInterface>,
-) -> impl Filter<Extract = (Arc<ShipInterface>,), Error = Infallible> + Clone {
-    warp::any().map(move || ship_interface.clone())
+    ship_interface: ShipAPI,
+) -> impl Filter<Extract = (ShipAPI,), Error = Infallible> + Clone {
+    warp::any().map(move || Arc::clone(&ship_interface))
 }

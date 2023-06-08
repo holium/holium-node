@@ -18,6 +18,7 @@ pub struct ShipInterface {
     pub ship_name: String,
     /// The Reqwest `Client` to be reused for making requests
     req_client: Client,
+    ship_code: String,
 }
 
 impl ShipInterface {
@@ -27,6 +28,7 @@ impl ShipInterface {
     /// by typing `+code` in dojo.
     pub async fn new(ship_url: &str, ship_code: &str) -> Result<ShipInterface> {
         let client = Client::new();
+
         let login_url = format!("{}/~/login", ship_url);
         let resp = client
             .post(&login_url)
@@ -59,7 +61,44 @@ impl ShipInterface {
             session_auth: session_auth.clone(),
             ship_name: ship_name.to_string(),
             req_client: client,
+            ship_code: ship_code.to_string(),
         })
+    }
+
+    pub async fn refresh(&mut self) -> Result<ShipInterface> {
+        let login_url = format!("{}/~/login", self.url);
+        let resp = self
+            .req_client
+            .post(&login_url)
+            .body("password=".to_string() + &self.ship_code)
+            .send()
+            .await?;
+
+        // Check for status code
+        if resp.status().as_u16() != 204 {
+            return Err(UrbitAPIError::FailedToLogin);
+        }
+
+        // Acquire the session auth header value
+        let session_auth = resp
+            .headers()
+            .get("set-cookie")
+            .ok_or(UrbitAPIError::FailedToLogin)?;
+
+        // Convert sessions auth to a string
+        let auth_string = session_auth
+            .to_str()
+            .map_err(|_| UrbitAPIError::FailedToLogin)?;
+
+        self.session_auth = session_auth.clone();
+
+        // Trim the auth string to acquire the ship name
+        let end_pos = auth_string.find('=').ok_or(UrbitAPIError::FailedToLogin)?;
+        let ship_name = &auth_string[9..end_pos];
+
+        self.ship_name = ship_name.to_string();
+
+        Ok(self.clone())
     }
 
     /// Returns the ship name with a leading `~` (By default ship_name does not have one)
