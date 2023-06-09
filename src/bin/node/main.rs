@@ -3,6 +3,7 @@ mod helpers;
 use std::convert::Infallible;
 
 use serde_derive::Serialize;
+use serde_json::Value;
 use warp::http::uri::PathAndQuery;
 use warp::http::StatusCode;
 use warp::{http::Uri, reject, Filter, Rejection, Reply};
@@ -145,15 +146,28 @@ fn reject_on_path(path: &str) -> warp::Rejection {
         || path.starts_with("/spider/")
     {
         true => {
-            println!("unauthorized");
             return reject::custom(Unauthorized);
         }
         false => {
-            println!("redirect");
             return reject::custom(Redirect {
                 location: format!("{}", path.to_string()),
             });
         }
+    }
+}
+
+fn handle_response(path: &str, data: Value) -> Result<(), warp::Rejection> {
+    let is_valid = data
+        .as_object()
+        .unwrap()
+        .get("is-valid")
+        .unwrap()
+        .as_bool()
+        .unwrap();
+    if is_valid {
+        return Ok(());
+    } else {
+        return Err(reject_on_path(path));
     }
 }
 
@@ -169,11 +183,10 @@ fn check_cookie(
                   ship_interface: SafeShipInterface,
                   headers: reqwest::header::HeaderMap| async move {
                 if !headers.contains_key("Cookie") {
-                    println!("no cookie");
                     return Err(reject_on_path(path.as_str()));
                 }
                 let cookie = headers.get("Cookie").unwrap().to_str().unwrap();
-                println!("path: {}, cookie: {}", path.as_str(), cookie);
+                // println!("path: {}, cookie: {}", path.as_str(), cookie);
                 let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();
                 let res = ship_interface
                     .scry(
@@ -183,30 +196,13 @@ fn check_cookie(
                     )
                     .await;
                 if res.is_ok() {
-                    println!("scry succeeded");
-                    let is_valid: bool = res
-                        .unwrap()
-                        .as_object()
-                        .unwrap()
-                        .get("is-valid")
-                        .unwrap()
-                        .as_bool()
-                        .unwrap();
-                    if is_valid {
-                        println!("cookie is valid");
-                        return Ok(());
-                    } else {
-                        println!("cookie is not valid");
-                        return Err(reject_on_path(path.as_str()));
-                    }
+                    return handle_response(path.as_str(), res.unwrap());
                 } else {
-                    println!("scry failed");
                     match res.err().unwrap() {
                         urbit_api::error::UrbitAPIError::StatusCode(403) => {
-                            println!("forbidden, refreshing...");
                             let res = ship_interface.refresh().await;
                             if res.is_err() {
-                                println!("error refreshing");
+                                eprintln!("error refreshing!");
                                 return Err(reject::custom(ServerError));
                             }
                             let res = ship_interface
@@ -217,27 +213,12 @@ fn check_cookie(
                                 )
                                 .await;
                             if res.is_err() {
-                                println!("error scrying after refresh");
+                                eprintln!("error scrying after refresh!");
                                 return Err(reject::custom(ServerError));
                             }
-                            let is_valid = res
-                                .unwrap()
-                                .as_object()
-                                .unwrap()
-                                .get("is-valid")
-                                .unwrap()
-                                .as_bool()
-                                .unwrap();
-                            if is_valid {
-                                println!("cookie is valid [post refresh]");
-                                return Ok(());
-                            } else {
-                                println!("cookie is invalid [post refresh]");
-                                return Err(reject_on_path(path.as_str()));
-                            }
+                            return handle_response(path.as_str(), res.unwrap());
                         }
-                        err => {
-                            println!("error: {}", err);
+                        _ => {
                             return Err(reject::custom(ServerError));
                         }
                     }
