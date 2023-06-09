@@ -143,14 +143,7 @@ impl ShipInterface {
         if result.status().as_u16() == 200 {
             Ok(result.json::<Value>().await?)
         } else {
-            match result.status().as_u16() {
-                403 => Err(UrbitAPIError::Forbidden),
-                500 => Err(UrbitAPIError::ServerError),
-                _ => Err(UrbitAPIError::Other(format!(
-                    "unexpected error: {}",
-                    result.status().as_u16()
-                ))),
-            }
+            Err(UrbitAPIError::StatusCode(result.status().as_u16()))
         }
     }
 
