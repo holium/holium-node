@@ -120,8 +120,8 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
         code = StatusCode::NOT_FOUND;
         message = "NOT_FOUND";
     } else if let Some(_) = err.find::<Unauthorized>() {
-        code = StatusCode::UNAUTHORIZED;
-        message = "UNAUTHORIZED";
+        code = StatusCode::FORBIDDEN;
+        message = "FORBIDDEN";
     } else {
         // We should have expected this... Just log and say its a 500
         eprintln!("unhandled rejection: {:?}", err);
