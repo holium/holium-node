@@ -45,3 +45,8 @@ test = false
 bench = false
 
 
+[features]
+# no features by default
+default = []
+
+debug_log = []

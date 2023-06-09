@@ -100,7 +100,10 @@ struct ErrorMessage {
 }
 
 async fn handle_unauthorized(reject: Rejection) -> Result<impl Reply, Rejection> {
-    println!("reject: {:?}", reject);
+    if cfg!(feature = "debug_log") {
+        println!("handle_unauthorized: {:?}", reject);
+    }
+
     if reject.is_not_found() {
         Ok(warp::redirect(Uri::from_static("/~/login?redirect=/")))
     } else if let Some(e) = reject.find::<Redirect>() {
@@ -114,6 +117,10 @@ async fn handle_unauthorized(reject: Rejection) -> Result<impl Reply, Rejection>
 }
 
 async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
+    if cfg!(feature = "debug_log") {
+        println!("handle_rejection: {:?}", err);
+    }
+
     let code;
     let message;
 
@@ -165,8 +172,14 @@ fn handle_response(path: &str, data: Value) -> Result<(), warp::Rejection> {
         .as_bool()
         .unwrap();
     if is_valid {
+        if cfg!(feature = "debug_log") {
+            println!("cookie valid {}", path)
+        }
         return Ok(());
     } else {
+        if cfg!(feature = "debug_log") {
+            println!("cookie invalid {}", path)
+        }
         return Err(reject_on_path(path));
     }
 }
@@ -186,7 +199,9 @@ fn check_cookie(
                     return Err(reject_on_path(path.as_str()));
                 }
                 let cookie = headers.get("Cookie").unwrap().to_str().unwrap();
-                // println!("path: {}, cookie: {}", path.as_str(), cookie);
+                if cfg!(feature = "debug_log") {
+                    println!("path: {}, cookie: {}", path.as_str(), cookie);
+                }
                 let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();
                 let res = ship_interface
                     .scry(
@@ -200,6 +215,9 @@ fn check_cookie(
                 } else {
                     match res.err().unwrap() {
                         urbit_api::error::UrbitAPIError::StatusCode(403) => {
+                            if cfg!(feature = "debug_log") {
+                                println!("|403| refreshing...");
+                            }
                             let res = ship_interface.refresh().await;
                             if res.is_err() {
                                 eprintln!("error refreshing!");
