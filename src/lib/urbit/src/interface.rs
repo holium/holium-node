@@ -1,5 +1,8 @@
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
 use crate::error::{Result, UrbitAPIError};
-use json::JsonValue;
+use serde_json::Value;
 
 use reqwest::header::{HeaderValue, COOKIE};
 use reqwest::{Client, Response};
@@ -13,11 +16,39 @@ pub struct ShipInterface {
     /// `http://0.0.0.0:8080`.
     pub url: String,
     /// The session auth string header value
-    pub session_auth: HeaderValue,
+    pub session_auth: Option<HeaderValue>,
     /// The ship name (without a leading ~)
-    pub ship_name: String,
+    pub ship_name: Option<String>,
     /// The Reqwest `Client` to be reused for making requests
     req_client: Client,
+    ship_code: String,
+}
+
+#[derive(Debug, Clone)]
+pub struct SafeShipInterface {
+    api: Arc<Mutex<ShipInterface>>,
+}
+
+/*
+  Provide a thread-safe wrapper around the underlying ShipInterface
+*/
+impl SafeShipInterface {
+    pub async fn new(url: &str, code: &str) -> Result<SafeShipInterface> {
+        let api = ShipInterface::new(url, code).await?;
+        Ok(SafeShipInterface {
+            api: Arc::new(Mutex::new(api)),
+        })
+    }
+
+    pub async fn refresh(&self) -> Result<()> {
+        let mut api = self.api.lock().await;
+        api.refresh().await
+    }
+
+    pub async fn scry(&self, app: &str, path: &str, mark: &str) -> Result<Value> {
+        let api = self.api.lock().await;
+        api.scry(app, path, mark).await
+    }
 }
 
 impl ShipInterface {
@@ -26,11 +57,27 @@ impl ShipInterface {
     /// `http://0.0.0.0:8080`. `ship_code` is the code acquire from your ship
     /// by typing `+code` in dojo.
     pub async fn new(ship_url: &str, ship_code: &str) -> Result<ShipInterface> {
-        let client = Client::new();
-        let login_url = format!("{}/~/login", ship_url);
-        let resp = client
+        let mut result = ShipInterface {
+            url: ship_url.to_string(),
+            session_auth: None, // HeaderValue::from_str("").unwrap(),
+            ship_name: None,    //
+            req_client: Client::new(),
+            ship_code: ship_code.to_string(),
+        };
+        match result.refresh().await {
+            Ok(_) => Ok(result),
+            Err(e) => {
+                return Err(e);
+            }
+        }
+    }
+
+    pub async fn refresh(&mut self) -> Result<()> {
+        let login_url = format!("{}/~/login", self.url);
+        let resp = self
+            .req_client
             .post(&login_url)
-            .body("password=".to_string() + &ship_code)
+            .body("password=".to_string() + &self.ship_code)
             .send()
             .await?;
 
@@ -50,21 +97,20 @@ impl ShipInterface {
             .to_str()
             .map_err(|_| UrbitAPIError::FailedToLogin)?;
 
+        self.session_auth = Some(session_auth.clone());
+
         // Trim the auth string to acquire the ship name
         let end_pos = auth_string.find('=').ok_or(UrbitAPIError::FailedToLogin)?;
         let ship_name = &auth_string[9..end_pos];
 
-        Ok(ShipInterface {
-            url: ship_url.to_string(),
-            session_auth: session_auth.clone(),
-            ship_name: ship_name.to_string(),
-            req_client: client,
-        })
+        self.ship_name = Some(ship_name.to_string());
+
+        Ok(())
     }
 
     /// Returns the ship name with a leading `~` (By default ship_name does not have one)
     pub fn ship_name_with_sig(&self) -> String {
-        format!("~{}", self.ship_name)
+        format!("~{}", self.ship_name.as_ref().unwrap().to_string())
     }
 
     /// Create a `Channel` using this `ShipInterface`
@@ -73,12 +119,12 @@ impl ShipInterface {
     }
 
     // Send a put request using the `ShipInterface`
-    pub async fn send_put_request(&self, url: &str, body: &JsonValue) -> Result<Response> {
-        let json = body.dump();
+    pub async fn send_put_request(&self, url: &str, body: &Value) -> Result<Response> {
+        let json = body.to_string();
         let resp = self
             .req_client
             .put(url)
-            .header(COOKIE, self.session_auth.clone())
+            .header(COOKIE, self.session_auth.clone().unwrap())
             .header("Content-Type", "application/json")
             .body(json);
 
@@ -86,15 +132,19 @@ impl ShipInterface {
     }
 
     /// Sends a scry to the ship
-    pub async fn scry(&self, app: &str, path: &str, mark: &str) -> Result<Response> {
+    pub async fn scry(&self, app: &str, path: &str, mark: &str) -> Result<Value> {
         let scry_url = format!("{}/~/scry/{}{}.{}", self.url, app, path, mark);
         let resp = self
             .req_client
             .get(&scry_url)
-            .header(COOKIE, self.session_auth.clone())
+            .header(COOKIE, self.session_auth.clone().unwrap())
             .header("Content-Type", "application/json");
-
-        Ok(resp.send().await?)
+        let result = resp.send().await?;
+        if result.status().as_u16() == 200 {
+            Ok(result.json::<Value>().await?)
+        } else {
+            Err(UrbitAPIError::StatusCode(result.status().as_u16()))
+        }
     }
 
     /// Run a thread via spider
@@ -103,9 +153,9 @@ impl ShipInterface {
         input_mark: &str,
         output_mark: &str,
         thread_name: &str,
-        body: &JsonValue,
+        body: &Value,
     ) -> Result<Response> {
-        let json = body.dump();
+        let json = body.to_string();
         let spider_url = format!(
             "{}/spider/{}/{}/{}.json",
             self.url, input_mark, thread_name, output_mark
@@ -114,7 +164,7 @@ impl ShipInterface {
         let resp = self
             .req_client
             .post(&spider_url)
-            .header(COOKIE, self.session_auth.clone())
+            .header(COOKIE, self.session_auth.clone().unwrap())
             .header("Content-Type", "application/json")
             .body(json);
 

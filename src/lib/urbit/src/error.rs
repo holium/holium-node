@@ -17,4 +17,8 @@ pub enum UrbitAPIError {
     Other(String),
     #[error(transparent)]
     ReqwestError(#[from] ReqError),
+    // standard http status codes. useful when scry calls fail
+    // and you need the underlying http request status code
+    #[error("{0}")]
+    StatusCode(u16),
 }

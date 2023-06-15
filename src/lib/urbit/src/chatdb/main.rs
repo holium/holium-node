@@ -2,6 +2,8 @@ use crate::error::Result;
 use crate::Channel;
 use crossbeam::channel::Receiver;
 
+use serde_json::Value;
+
 pub struct ChatDb<'a> {
     pub channel: &'a mut Channel,
 }
@@ -36,7 +38,7 @@ impl<'a> RealmChat<'a> {
                         // Acquire the message
                         if let Some(mess) = &pop_res {
                             // Parse it to json
-                            if let Ok(json) = json::parse(mess) {
+                            if let Ok(json) = from_str::<Value>(mess) {
                                 // TODO - Parse the json into a struct
                                 println!("JSON: {}", json);
                             }
