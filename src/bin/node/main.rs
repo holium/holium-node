@@ -9,6 +9,7 @@ use warp::http::StatusCode;
 use warp::{http::Uri, reject, Filter, Rejection, Reply};
 
 use structopt::StructOpt;
+use urbit_api::chatdb;
 use urbit_api::SafeShipInterface;
 
 use warp_reverse_proxy::reverse_proxy_filter;
@@ -35,6 +36,9 @@ pub struct HolAPI {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = HolAPI::from_args();
 
+    // initialize the database based on the scripts found in the ./lib/db/src/migrations folder
+    let db = bedrock_db::db::initialize("holon.db").await?;
+
     let server_url = format!("127.0.0.1:{}", opt.urbit_port.clone());
     wait_for_server(&server_url.parse().expect("Cannot parse url")).await?;
 
@@ -53,6 +57,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(_) => println!("test_scry: {}", scry_res.unwrap().to_string()),
         Err(e) => println!("scry failed: {}", e),
     }
+
+    // initialize the various databases
+    chatdb::load(db.clone(), ship_interface.clone()).await?;
 
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();

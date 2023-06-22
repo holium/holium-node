@@ -2,13 +2,19 @@ use crate::error::Result;
 use crate::Channel;
 use crossbeam::channel::Receiver;
 
+use bedrock_db::db::Db;
 use serde_json::Value;
+
+// todo: scry chat data and load into db
+pub fn load(db: Db) -> Result<()> {
+    Ok(())
+}
 
 pub struct ChatDb<'a> {
     pub channel: &'a mut Channel,
 }
 
-impl<'a> RealmChat<'a> {
+impl<'a> ChatDb<'a> {
     fn channel(&mut self) -> &mut Channel {
         self.channel
     }
@@ -54,5 +60,15 @@ impl<'a> RealmChat<'a> {
             }
         });
         Ok(r)
+    }
+
+    pub fn initialize(
+        pool: Pool<SqliteConnectionManager>,
+        ship_interface: SafeShipInterface,
+    ) -> Result<bool> {
+        let mut channel = Channel::new(ship_interface);
+        let mut chat_db = ChatDb { channel };
+        chat_db.subscribe()?;
+        Ok(chat_db)
     }
 }

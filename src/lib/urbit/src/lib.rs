@@ -1,4 +1,5 @@
 pub mod channel;
+pub mod chatdb;
 pub mod error;
 pub mod helper;
 pub mod interface;
