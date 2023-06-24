@@ -54,6 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => println!("scry failed: {}", e),
     }
 
+    let passport_route = passport::api::passport_route();
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
 
@@ -63,7 +64,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         format!("http://localhost:{}/~/login/", opt.urbit_port.clone()),
     ));
 
-    let routes = rooms_route.or(signaling_route).or(login_route);
+    let routes = rooms_route
+        .or(passport_route)
+        .or(signaling_route)
+        .or(login_route);
 
     let routes = routes
         .or(check_cookie(ship_interface).and(proxy))
@@ -195,6 +199,7 @@ fn check_cookie(
             move |path: warp::path::FullPath,
                   ship_interface: SafeShipInterface,
                   headers: reqwest::header::HeaderMap| async move {
+                println!("checking cookie on path: {}", path.as_str());
                 if !headers.contains_key("Cookie") {
                     return Err(reject_on_path(path.as_str()));
                 }

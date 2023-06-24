@@ -56,7 +56,7 @@ cargo install cargo-watch
 # observe changes and re-run command with each new build
 cargo watch -x run
 # or
-cargo watch -x 'run zod start'
+cargo watch -x 'run zod stop' -x 'run zod start'
 ```
 
 See [Cargo Watch](https://crates.io/crates/cargo-watch) docs for more complex use.

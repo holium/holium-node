@@ -1,0 +1,17 @@
+[package]
+name = "passport"
+version = "0.1.0"
+description = "Enable friends discovery for new Realm users."
+authors = ["Trent Gillham <6413077+drunkplato@users.noreply.github.com>"]
+edition = "2021"
+
+[dependencies]
+warp = "0.3.5"
+serde = "1.0.163"
+serde_json = "1.0.96"
+tokio = "1.28.1"
+chrono = { version = "0.4", features = ["serde"] }
+diesel = { version = "1.4", features = ["postgres", "r2d2", "uuid", "chrono"] }
+diesel_migrations = "1.4"
+r2d2 = "0.8"
+uuid = { version = "0.6", features = ["serde", "v4"] }
