@@ -1,23 +1,26 @@
 use crate::get_connection;
 use crate::models::Passport;
+use chrono::NaiveDateTime;
 use diesel::prelude::*;
 
-pub fn db_get_contact_passports(phone_numbers: Vec<String>) {
+pub fn db_get_contact_passports(
+    phone_numbers: Vec<String>,
+    twitter_handles: Vec<String>,
+    since: NaiveDateTime,
+) -> Vec<Passport> {
     use crate::schema::passports::dsl::*;
     let mut conn = get_connection().expect("Failed to get database connection");
 
-    let results = passports
+    passports
+        .filter(
+            phone_number
+                .eq_any(&phone_numbers)
+                .or(twitter.eq_any(&twitter_handles)),
+        )
         .filter(is_public.eq(true))
-        .filter(phone_number.eq_any(phone_numbers))
+        .filter(updated_at.gt(since))
         .load::<Passport>(&mut conn)
-        .expect("Error loading passports");
-
-    println!("Displaying {} passports", results.len());
-    for passport in results {
-        println!("{:?}", passport.phone_number);
-        println!("-----------\n");
-        println!("{}", passport.ship);
-    }
+        .expect("Error loading passports")
 }
 
 pub fn db_insert_passport(passport: Passport) -> Passport {

@@ -1,7 +1,11 @@
+use tokio::join;
 use warp::Filter;
 
 use bedrock_db::api::{db_get_contact_passports, db_insert_passport};
 use bedrock_db::models::Passport;
+use chrono::NaiveDateTime;
+use reqwest::Client;
+use serde::Deserialize;
 
 pub fn get_contact_passports(
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
@@ -18,10 +22,44 @@ pub fn get_contact_passports(
     get_passports.with(cors)
 }
 
+#[derive(Deserialize)]
+struct GetContactPassports {
+    phone_numbers: Option<Vec<String>>,
+    twitter: Option<String>,
+    since: Option<i64>,
+}
+
 async fn handle_get_contact_passports(
-    phone_numbers: Vec<String>,
+    GetContactPassports {
+        phone_numbers,
+        twitter,
+        since,
+    }: GetContactPassports,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    Ok(warp::reply::json(&db_get_contact_passports(phone_numbers)))
+    // If since is unset, defaults to T=0
+    let since_time: NaiveDateTime =
+        NaiveDateTime::from_timestamp_millis(since.unwrap_or_else(|| 0)).unwrap();
+
+    // TODO: normalize phone number format if necessary
+    let phone_numbers = phone_numbers.unwrap_or_else(|| vec![]);
+
+    let twitter_handles = vec![];
+    if twitter.is_some() {
+        let endpoint = format!("https://api.twitter.com/2/users/{}", twitter.unwrap());
+        let client = Client::new();
+        // TODO: hit twitter API with twitter to get all followers and following, if given
+
+        // let (followers, following) = join!(
+        //     client.get(concat!(endpoint, "/followers")).send(),
+        //     client.get(concat!(endpoint, "/following")).send()
+        // );
+    }
+
+    Ok(warp::reply::json(&db_get_contact_passports(
+        phone_numbers,
+        twitter_handles,
+        since_time,
+    )))
 }
 
 pub fn insert_passport(
