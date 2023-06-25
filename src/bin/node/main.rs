@@ -54,7 +54,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => println!("scry failed: {}", e),
     }
 
-    let passport_route = passport::api::passport_route();
+    let passport_contact_route = passport::api::get_contact_passports();
+    let passport_insert_route = passport::api::insert_passport();
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
 
@@ -65,7 +66,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ));
 
     let routes = rooms_route
-        .or(passport_route)
+        .or(passport_contact_route)
+        .or(passport_insert_route)
         .or(signaling_route)
         .or(login_route);
 
@@ -83,6 +85,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 struct Unauthorized;
 
 impl reject::Reject for Unauthorized {}
+
+#[derive(Debug)]
+struct BadRequest;
+
+impl reject::Reject for BadRequest {}
 
 #[derive(Debug)]
 struct Redirect {
@@ -134,6 +141,9 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
     } else if let Some(_) = err.find::<Unauthorized>() {
         code = StatusCode::FORBIDDEN;
         message = "FORBIDDEN";
+    } else if let Some(_) = err.find::<BadRequest>() {
+        code = StatusCode::BAD_REQUEST;
+        message = "Bad Request.  Make sure this path exists, and your request body is of the expected format.";
     } else {
         // We should have expected this... Just log and say its a 500
         eprintln!("unhandled rejection: {:?}", err);
@@ -152,6 +162,10 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
 // list of paths considered "api" calls; and therefore should return Json data and
 //  reject with 401. all other calls (UI calls) should redirect to login
 fn reject_on_path(path: &str) -> warp::Rejection {
+    if path.starts_with("/hol/") {
+        return reject::custom(BadRequest);
+    }
+
     match path.starts_with("/~/scry/")
         || path.starts_with("/~/channel/")
         || path.starts_with("/spider/")
@@ -188,6 +202,8 @@ fn handle_response(path: &str, data: Value) -> Result<(), warp::Rejection> {
     }
 }
 
+// Check cookie.  We also reject any requests that come here on path /hol/... - warp doesn't match
+// on them earlier if their JSON body is incorrect.
 fn check_cookie(
     ship_interface: SafeShipInterface,
 ) -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
@@ -199,6 +215,10 @@ fn check_cookie(
             move |path: warp::path::FullPath,
                   ship_interface: SafeShipInterface,
                   headers: reqwest::header::HeaderMap| async move {
+                if path.as_str().starts_with("/hol/") {
+                    return Err(reject_on_path(path.as_str()));
+                }
+
                 println!("checking cookie on path: {}", path.as_str());
                 if !headers.contains_key("Cookie") {
                     return Err(reject_on_path(path.as_str()));
