@@ -5,13 +5,13 @@ use r2d2::Pool;
 use r2d2_sqlite::SqliteConnectionManager;
 
 #[derive(Debug, Clone)]
-pub struct Db<'a> {
-    db_name: &'a str,
-    pool: Option<Pool<SqliteConnectionManager>>,
+pub struct Db {
+    db_name: String,
+    pub pool: Option<Pool<SqliteConnectionManager>>,
 }
 
-impl Db<'_> {
-    pub async fn new(db_name: &str) -> Result<Db> {
+impl Db {
+    pub async fn new(db_name: String) -> Result<Db> {
         Ok(Db {
             db_name,
             pool: None,
@@ -20,7 +20,7 @@ impl Db<'_> {
 
     // A function to establish a connection pool to the SQLite database.
     fn establish_connection(&mut self) -> Result<()> {
-        Pool::new(SqliteConnectionManager::file(self.db_name))?;
+        self.pool = Some(Pool::new(SqliteConnectionManager::file(&self.db_name))?);
         return Ok(());
     }
 
@@ -55,7 +55,7 @@ impl Db<'_> {
     }
 }
 
-pub async fn initialize(db_name: &str) -> Result<Db> {
+pub async fn initialize(db_name: String) -> Result<Db> {
     let mut db = Db::new(db_name).await?;
     db.initialize().await?;
     return Ok(db);

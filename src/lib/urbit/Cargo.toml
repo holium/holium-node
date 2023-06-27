@@ -6,14 +6,19 @@ authors = ["Trent Gillham <6413077+drunkplato@users.noreply.github.com>", "Rober
 edition = "2021"
 
 [dependencies]
+bedrock-db = { path = "../db" }
 eventsource-threaded = "0.1.0"
-reqwest = { version = "0.11.18", features = ["blocking", "json"] }
-thiserror = "1.0.40"
-json = "0.12.4"
-rand = "0.8.5"
 futures = "0.3"
+futures-util = "0.3.28"
+json = "0.12.4"
+lazy_static = "1.4.0"
+net = { path = "../net" }
+rand = "0.8.5"
+reqwest = { version = "0.11.18", features = ["blocking", "json"] }
 serde = "1.0.163"
 serde_json = "1.0.96"
+thiserror = "1.0.40"
 tokio = "1.28.1"
+tokio-stream = "0.1.14"
 warp = "0.3.5"
-bedrock-db = { path = "../db" }
+warp-real-ip = "0.2.0"

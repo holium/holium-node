@@ -1,71 +1,46 @@
-use lazy_static::lazy_static;
-use std::{
-    collections::{HashMap, VecDeque},
-    sync::{Arc, RwLock},
-};
+// use serde::Deserialize;
+// use serde_json::Value;
 
-use serde::{Deserialize, Serialize};
-use tokio::sync::mpsc::UnboundedSender;
-use warp::ws::Message;
+// #[derive(Debug, Deserialize)]
+// pub struct ChatRow {
+//     id: u32,
+//     app: String,
+//     path: String,
+//     #[serde(rename = "type")]
+//     type_: String,
+//     title: String,
+//     content: String,
+//     image: String,
+//     buttons: Value, // in Rust, we could use serde_json::Value to represent an arbitrary serialized JSON data
+//     link: String,
+//     metadata: Value, // same as above
+//     created_at: u64,
+//     updated_at: u64,
+//     read_at: Option<u64>,
+//     read: bool,
+//     dismissed_at: Option<u64>,
+//     dismissed: bool,
+// }
 
-pub type PeerId = String;
-pub type PeerIp = String;
-pub type Rid = String;
+// // Define an enum `DbChangeType` to represent the different variants of changes.
+// pub enum DbChangeType {
+//     AddRow(DbRow),
+//     UpdMessages(MsgId, Message),
+//     UpdPathsRow(PathRow, PathRow),
+//     DelPathsRow(Path, DateTime<Utc>),
+//     DelPeersRow(Path, Ship, DateTime<Utc>),
+//     DelMessagesRow(Path, UniqId, DateTime<Utc>),
+// }
 
-pub type PeerInfo = (PeerIp, UnboundedSender<Message>, Peer);
-pub type Peers = HashMap<PeerId, PeerInfo>;
+// // Define `DbRow` enum to hold the different types of rows
+// pub enum DbRow {
+//     Paths(PathRow),
+//     Messages(MsgPart),
+//     Peers(PeerRow),
+// }
 
-pub type PeerMap = Arc<RwLock<Peers>>;
-pub type PeerIds = Arc<RwLock<VecDeque<PeerId>>>;
+// // `DbChange` is simply a vector of `DbChangeType`
+// pub type DbChange = Vec<DbChangeType>;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Peer {
-    pub id: PeerId,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Room {
-    pub rid: String,
-    pub title: String,
-    pub creator: String,
-    pub provider: String,
-    pub access: String,
-    pub present: Vec<String>,
-    pub whitelist: Vec<String>,
-    pub capacity: u32,
-    pub path: Option<String>,
-}
-pub type RoomLock = Arc<RwLock<Room>>;
-
-pub type RoomTuple = (PeerMap, RoomLock);
-
-lazy_static! {
-    // pub static ref ROOM_MAP: RwLock<HashMap<Rid, RoomTuple>> = RwLock::new(HashMap::new());
-    pub static ref ROOM_MAP: RwLock<HashMap<Rid, RoomLock>> = RwLock::new(HashMap::new());
-    pub static ref PEER_MAP: RwLock<HashMap<PeerId, PeerInfo>> = RwLock::new(HashMap::new());
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(untagged)]
-pub enum Response {
-    Ok {
-        rtype: String,
-    },
-    Error {
-        rtype: String,
-        message: String,
-    },
-    RoomUpdate {
-        rtype: String,
-        room: String,
-        peers: Vec<Peer>,
-    },
-    PeerJoined {
-        rtype: String,
-        peer_id: PeerId,
-    },
-    PeerLeft {
-        rtype: String,
-        peer_id: PeerId,
-    },
-}
+// // `DelLog` is a vector of tuples, where each tuple contains a DateTime and a DbChangeType
+// pub type DelLog = Vec<(DateTime<Utc>, DbChangeType)>;

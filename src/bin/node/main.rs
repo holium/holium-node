@@ -8,6 +8,8 @@ use warp::http::uri::PathAndQuery;
 use warp::http::StatusCode;
 use warp::{http::Uri, reject, Filter, Rejection, Reply};
 
+use tokio::sync::mpsc::{self};
+
 use structopt::StructOpt;
 use urbit_api::chatdb;
 use urbit_api::SafeShipInterface;
@@ -37,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let opt = HolAPI::from_args();
 
     // initialize the database based on the scripts found in the ./lib/db/src/migrations folder
-    let db = bedrock_db::db::initialize("holon.db").await?;
+    let db = bedrock_db::db::initialize("holon.db".to_string()).await?;
 
     let server_url = format!("127.0.0.1:{}", opt.urbit_port.clone());
     wait_for_server(&server_url.parse().expect("Cannot parse url")).await?;
@@ -58,11 +60,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => println!("scry failed: {}", e),
     }
 
-    // initialize the various databases
-    chatdb::load(db.clone(), ship_interface.clone()).await?;
+    // get some thread-safe channels for relaying messages from the ship (EventSource)
+    //  to the client/browser (WebSocket)
+    //  each hub (e.g. chat hub) leverages these channels to relay ship messages to the client
+    // let (sender, receiver) = mpsc::unbounded_channel();
+
+    let mut dispatcher = net::dispatcher::Dispatcher::new();
+
+    // load all the hubs. hub is the term for an object that supports
+    //  db reads/writes, ship channel events, and websocket messaging
+    // every Realm "feature" should implement a hub
+    let result = chatdb::hub::init(db.clone(), ship_interface.clone());
+    if result.is_ok() {
+        // subscribe to chat events coming from ship
+        dispatcher.add_sub("/chat/db".to_string(), chatdb::hub::handle_message);
+    }
 
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
+    let ws_route = net::socket::ws_route(dispatcher);
 
     let proxy = reverse_proxy_filter("".to_string(), http_server_url);
     let login_route = warp::path!("~" / "login" / ..).and(reverse_proxy_filter(
@@ -70,7 +86,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         format!("http://localhost:{}/~/login/", opt.urbit_port.clone()),
     ));
 
-    let routes = rooms_route.or(signaling_route).or(login_route);
+    let routes = rooms_route.or(signaling_route).or(ws_route).or(login_route);
 
     let routes = routes
         .or(check_cookie(ship_interface).and(proxy))
