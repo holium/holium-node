@@ -1,0 +1,19 @@
+[package]
+name = "peers"
+version = "0.1.0"
+description = "A module that stores peer info, verifies signatures of those peers, and send updates to your peer to others."
+authors = ["Trent Gillham <6413077+drunkplato@users.noreply.github.com>"]
+edition = "2021"
+
+[dependencies]
+bip32 = "0.5.1"
+bip39 = "2.0.0"
+coins-bip39 = "0.8.6"
+ethers = "2.0"
+rand_core = "0.6.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0.96"
+x25519-dalek = {version ="2.0.0-rc.3", features = ["static_secrets"]}
+sha2 = "0.10.7"
+base64 = "0.21.2"
+

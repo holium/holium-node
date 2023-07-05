@@ -8,3 +8,7 @@ hol-urbit
 ships
 hol.pid
 node_modules
+# keyfile
+*.key
+
+.DS_Store
