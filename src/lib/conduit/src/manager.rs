@@ -44,10 +44,14 @@ impl ConduitManager {
         seq_num: u64,
         peer: PeerId,
     ) -> Result<(), std::io::Error> {
-        let shared_secret = vec![]; // You should replace this with your actual shared_secret
-
         if let Some((conduit_peer, conduit_runtime)) = self.conduits.get(&peer) {
-            let packet = ConduitPacket::new(&self.our, conduit_peer, seq_num, data, shared_secret);
+            let packet = ConduitPacket::new(
+                &self.our,
+                conduit_peer,
+                seq_num,
+                data,
+                "peer.sig".to_string(),
+            );
             let mut conduit = conduit_runtime.lock().await;
             conduit.send_packet(packet.clone()).await.unwrap();
             Ok(())

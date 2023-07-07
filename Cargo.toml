@@ -15,7 +15,6 @@ rooms = { path = "./src/lib/rooms" }
 urbit-api = { path = "./src/lib/urbit" }
 peers = { path = "./src/lib/peers" }
 conduit = { path = "./src/lib/conduit" }
-os = { path = "./src/lib/os" }
 # 
 bytes = "1.0"
 event-listener-primitives = "2.0.1"
@@ -48,6 +47,11 @@ path = "src/bin/node/main.rs"
 test = false
 bench = false
 
+[[bin]]
+name = "os"
+path = "src/os/src/main.rs"
+test = false
+bench = false
 
 [features]
 # no features by default

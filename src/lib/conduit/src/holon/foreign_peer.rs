@@ -1,13 +1,11 @@
-use std::{collections::HashMap, hash::Hash, rc::Rc};
-
-use bip32::Mnemonic;
-
+// crate imports
 use serde::{Deserialize, Serialize};
+use std::rc::Rc;
 use x25519_dalek::{PublicKey, SharedSecret, StaticSecret};
 
+// project imports
 use super::{
     address::Address,
-    hd_wallet::HDWallet,
     state::{PrintStateChangeListener, StateChangeListener},
 };
 
@@ -20,15 +18,22 @@ pub enum ForeignPeerState {
     Rejected,
 }
 
+pub struct ForeignPeerEntry {
+    pub epoch: i8, // the epoch of the peer, should be incremented when the keypair is updated
+    pub hid: String, // the holon id of the peer
+    pub address: Address, // the ip address and port of the peer
+    pub pubkey: [u8; 32], // the public key of the peer
+}
+
 // #[derive(Clone, Serialize, Deserialize)]
 pub struct ForeignPeer {
     pub epoch: i8, // the epoch of the peer, should be incremented when the keypair is updated
     pub hid: String, // the holon id of the peer
     pub address: Address, // the ip address and port of the peer
     pub pubkey: [u8; 32], // the public key of the peer
+    pub state: ForeignPeerState,
+    pub state_listener: Rc<dyn StateChangeListener>,
     shared_secret: Option<SharedSecret>,
-    state: ForeignPeerState,
-    state_listener: Rc<dyn StateChangeListener>,
 }
 
 impl ForeignPeer {
@@ -153,115 +158,5 @@ impl<'de> Deserialize<'de> for ForeignPeer {
             state: peer.state,
             state_listener: peer.state_listener,
         })
-    }
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct OurPeer {
-    pub epoch: i8, // the epoch of the peer, should be incremented when the keypair is updated
-    pub hid: String,
-    pub address: Address, // the ip address and port of the peer
-    hd_wallet: HDWallet,
-    peers: HashMap<String, ForeignPeer>,
-}
-
-impl OurPeer {
-    pub fn init(
-        epoch: i8,
-        hid: String,
-        address: Address,
-        mnemonic_phrase: Mnemonic,
-        password: String,
-    ) -> Self {
-        let hd_wallet = HDWallet::new(mnemonic_phrase.to_seed(password.as_str()).as_bytes());
-        return OurPeer {
-            epoch,
-            hid,
-            address,
-            hd_wallet,
-            peers: HashMap::new(),
-        };
-    }
-
-    pub fn get_addr(&self) -> String {
-        self.address.get_addr()
-    }
-
-    pub fn sign_message(&self, message: &[u8]) -> [u8; 64] {
-        self.hd_wallet.sign_message(message)
-    }
-
-    pub fn add_foreign_peer(&mut self, peer: ForeignPeer) {
-        self.peers.insert(peer.hid.clone(), peer);
-    }
-
-    // pub fn discover_peer
-
-    // Transition from HandshakeReceived to Verified or Rejected
-    pub fn process_handshake(
-        &mut self,
-        hid: String,
-        pubkey: Vec<u8>,
-        signature: Vec<u8>,
-    ) -> Result<(), &'static str> {
-        if let Some(peer) = self.peers.get_mut(&hid) {
-            match peer.state {
-                ForeignPeerState::HandshakeSent => {
-                    // Verify the signature
-                    // if !verify_signature(&pubkey, &signature) {
-                    //    peer.state = PeerState::Rejected;
-                    //    return Err("Invalid signature");
-                    // }
-
-                    // let pubkey_array = <[u8; 32]>::try_from(&pubkey[..]).unwrap();
-                    // *peer = ForeignPeerState::new(
-                    //     1,
-                    //     "hid".into(),
-                    //     Address::new(1, "127.0.0.1".into(), 9030),
-                    //     pubkey_array,
-                    //     self.hd_wallet.private_key,
-                    // );
-                    peer.state = ForeignPeerState::Verified;
-                    Ok(())
-                }
-                _ => Err("Invalid state transition"),
-            }
-        } else {
-            Err("Peer not found")
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn gen_test_peer() -> OurPeer {
-        let epoch = 1;
-        let hid = "test".to_string();
-        let address = Address::new(1, "127.0.0.1".to_string(), 9030);
-        let mnemonic_phrase = Mnemonic::new("mention citizen dutch share final ship valid balance rack drastic mystery grief require fluid mom forget toast business snake laugh faint dentist ensure return", bip32::Language::English).unwrap();
-        let password = "password".to_string();
-        let our_peer = OurPeer::init(epoch, hid, address, mnemonic_phrase, password);
-        our_peer
-    }
-
-    fn gen_test_foreign_peer(our_privkey: [u8; 32]) -> ForeignPeer {
-        let epoch = 1;
-        let hid = "test".to_string();
-        let address = Address::new(1, "127.0.0.1".to_string(), 9031);
-        let peer_pubkey = [0u8; 32];
-        let foreign_peer = ForeignPeer::new(epoch, hid, address, peer_pubkey, our_privkey);
-    }
-
-    #[test]
-    fn init_our_peer() {
-        let our_peer = gen_test_peer();
-        assert_eq!(our_peer.epoch, 1);
-    }
-
-    #[test]
-    fn it_discovers_foreign_peer() {
-        let our_peer = gen_test_peer();
     }
 }

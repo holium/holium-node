@@ -1,5 +1,3 @@
-// use aes_gcm::aead::{generic_array::GenericArray, Aead};
-// use aes_gcm::Aes256Gcm; // Or Aes128Gcm
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::collections::HashSet;
@@ -11,22 +9,20 @@ use tokio::time::{sleep, Duration};
 
 use crate::holon::address::Address;
 
-// use x25519_dalek::{EphemeralSecret, PublicKey, SharedSecret};
-
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConduitPeer {
     pub hid: String,
-    pub xpub: String,
+    pub pubkey: [u8; 32],
     pub addr: Address,
     xpriv: Option<String>,
 }
 
 impl ConduitPeer {
-    pub fn new(hid: String, addr: Address, xpub: String, xpriv: Option<String>) -> Self {
+    pub fn new(hid: String, addr: Address, pubkey: [u8; 32], xpriv: Option<String>) -> Self {
         ConduitPeer {
             hid,
             addr,
-            xpub,
+            pubkey,
             xpriv,
         }
     }
@@ -34,11 +30,11 @@ impl ConduitPeer {
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ConduitPacket {
-    from: ConduitPeer, // our
-    to: ConduitPeer,   // peer
-    seq_num: u64,
-    data: Vec<u8>,
-    shared_secret: Vec<u8>,
+    pub from: ConduitPeer, // our
+    pub to: ConduitPeer,   // peer
+    pub seq_num: u64,
+    pub data: Vec<u8>,
+    pub signature: String,
 }
 
 impl ConduitPacket {
@@ -47,14 +43,14 @@ impl ConduitPacket {
         to: &ConduitPeer,
         seq_num: u64,
         data: Vec<u8>,
-        shared_secret: Vec<u8>,
+        signature: String,
     ) -> Self {
         ConduitPacket {
             from: from.clone(),
             to: to.clone(),
             seq_num,
             data,
-            shared_secret,
+            signature,
         }
     }
 
