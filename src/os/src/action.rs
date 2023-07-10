@@ -4,13 +4,8 @@ use crate::modules::passport::contracts::IdentitySystem;
 
 #[derive(Clone, Debug)]
 pub enum Action {
-    // Init actions
     Preboot(PrebootArgs),
-
-    // Boot actions
     Boot(BootArgs),
-
-    // Shutdown actions
     Shutdown(),
     // Active actions
     // ReadData {

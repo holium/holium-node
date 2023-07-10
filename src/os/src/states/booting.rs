@@ -1,7 +1,6 @@
 use crate::action::Action;
 use crate::effect::Effect;
 use crate::holon::OurPeer;
-use crate::modules::conduit::spawn_conduit_listener;
 use crate::states::{CloneState, State};
 use crate::OS;
 use async_trait::async_trait;
@@ -23,7 +22,15 @@ impl Booting {
 
     pub fn start_conduit(&self, identity: OurPeer) {
         println!("{} - starting conduit", self.describe());
-        spawn_conduit_listener(identity);
+        // spawn_conduit_listener(identity);
+    }
+
+    pub fn start_db(&self) {
+        println!("{} - starting db", self.describe());
+    }
+
+    pub fn start_client_server(&self) {
+        println!("{} - starting client server", self.describe());
     }
 }
 
@@ -32,6 +39,7 @@ impl State for Booting {
     fn describe(&self) -> String {
         String::from("booting")
     }
+
     async fn perform_action(&self, action: Action, os_state: &OS) -> ActionResult {
         match action {
             Action::Boot(_) => {

@@ -110,7 +110,7 @@ impl OS {
         self.push_event(Event::Action(action.clone()));
 
         let effects = self.node_state.perform_action(action, self).await.unwrap();
-
+        
         // Extract new state from effects if it exists
         let new_state = effects.iter().find_map(|effect| match &effect {
             Effect::StateTransition(next_state) => Some((*next_state).clone_box()),

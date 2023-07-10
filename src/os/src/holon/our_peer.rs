@@ -3,7 +3,7 @@ use bip32::Mnemonic;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::modules::conduit::types::ConduitPacket;
+use crate::modules::conduit::types::{ConduitPacket, ConduitPeer};
 
 // project imports
 use super::{
@@ -54,6 +54,17 @@ impl OurPeer {
         self.address.get_addr()
     }
 
+    pub fn get_networking_pubkey(&self) -> [u8; 32] {
+        self.hd_wallet.get_networking_pubkey()
+    }
+
+    pub fn get_conduit_peer_entry(&self) -> ConduitPeer {
+        ConduitPeer {
+            hid: self.hid.clone(),
+            addr: self.address.clone(),
+            pubkey: self.get_networking_pubkey(),
+        }
+    }
     pub fn sign_message(&self, message: &[u8]) -> [u8; 64] {
         self.hd_wallet.sign_message(message)
     }

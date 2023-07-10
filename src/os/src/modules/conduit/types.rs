@@ -47,11 +47,11 @@ impl ConduitPacket {
         }
     }
 
-    // fn serialize(&self) -> Result<Vec<u8>, Box<bincode::ErrorKind>> {
-    //     bincode::serialize(self)
-    // }
+    pub fn serialize(&self) -> Result<Vec<u8>, Box<bincode::ErrorKind>> {
+        bincode::serialize(self)
+    }
 
-    // fn deserialize(data: &[u8]) -> Result<ConduitPacket, Box<bincode::ErrorKind>> {
-    //     bincode::deserialize(data)
-    // }
+    pub fn deserialize(data: &[u8]) -> Result<ConduitPacket, Box<bincode::ErrorKind>> {
+        bincode::deserialize(data)
+    }
 }

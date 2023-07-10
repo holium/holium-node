@@ -16,6 +16,9 @@ impl Azimuth {
         "azimuth".to_string()
     }
 
+    // 1. ganache-cli
+    // 2. truffle
+    // azimuth repo
     pub async fn get_full_state(&self) -> Result<(), Box<dyn std::error::Error>> {
         let provider = Provider::<Http>::try_from("http://localhost:8545")?;
         let client = Arc::new(provider);

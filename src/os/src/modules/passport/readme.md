@@ -1,10 +1,9 @@
 ## Passport module
 
-### States
-- embryo: pre-verified identity
-- alive: verified identity and ready to use keys
-- void: if the keys are deregistered or epoch is incremented.
+### Getting started
 
-embryo -> alive
-alive -> void
-void -> embryo
+- Download ganache: https://trufflesuite.com/docs/ganache/
+- npm install -g truffle
+- git clone https://github.com/urbit/azimuth
+  - follow the readme
+

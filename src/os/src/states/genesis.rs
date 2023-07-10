@@ -56,46 +56,6 @@ impl Genesis {
             identity_system: args.identity_system,
         }))
     }
-
-    // pub async fn get_azimuth_state(&self) -> Result<(), Box<dyn std::error::Error>> {
-    //     // 1. Fetch azimuth snapshot from eth node
-    //     let transport = web3::transports::Http::new("http://localhost:8545")?;
-    //     let web3 = web3::Web3::new(transport);
-
-    //     let contract_address: EthAddr =
-    //         EthAddr::from_str("0x223c067f8cf28ae173ee5cafea60ca44c335fecb").unwrap();
-
-    //     let contract = Contract::from_json(
-    //         web3.eth(),
-    //         contract_address,
-    //         include_bytes!("../modules/passport/contracts/abi/azimuth_abi.json"),
-    //     )?;
-
-    //     let zod = EthAddr::from_str("0x9F57C77b1095BD5Db0558b9Cb9b8e6Fc67375E3C").unwrap();
-
-    //     let result: bool = contract
-    //         .query("isOwner", (0, zod), None, Options::default(), None)
-    //         .await?;
-
-    //     println!("Query result: {:?}", result);
-    //     // let result = contract.query("getKeys", (), None, Options::default(), None);
-    //     // let public_key: U256 = result.await.unwrap();
-
-    //     // println!("Public Key: {:?}", public_key);
-
-    //     // let message = "message to sign"; // replace with your actual message
-    //     // let signature = "signature_here"; // replace with the actual signature
-
-    //     // let secp = Secp256k1::new();
-    //     // let message = Message::from_slice(&message.as_bytes()).unwrap();
-    //     // let signature = Signature::from_compact(&Vec::from_hex(signature).unwrap()).unwrap();
-    //     // let recovery_id = RecoveryId::from_i32(0).unwrap(); // You need to know the recovery id
-    //     // let public_key_secp = secp.recover(&message, &signature, &recovery_id).unwrap();
-
-    //     // println!("Recovered Public Key: {:?}", public_key_secp);
-
-    //     Ok(())
-    // }
 }
 
 #[async_trait(?Send)]
@@ -108,7 +68,6 @@ impl State for Genesis {
             Action::Preboot(preboot_args) => {
                 self.start_preboot().await;
                 let passport_effect = self.create_passport(preboot_args);
-
                 ActionResult::Ok(vec![
                     passport_effect,
                     Effect::StateTransition(Box::new(Booting::new())),

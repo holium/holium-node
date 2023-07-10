@@ -37,6 +37,9 @@ impl GlobalState {
                 self.modules.passport.identity = Some(identity.clone());
                 self.modules.passport.identity_system = Some(identity_system.clone());
             }
+            // GlobalStateChange::DbCreated(_) => {
+            //     // TODO
+            // }
             GlobalStateChange::Shutdown => {}
             GlobalStateChange::DataWritten => {}
             GlobalStateChange::DataDeleted => {}
