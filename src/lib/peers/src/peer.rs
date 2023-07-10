@@ -2,17 +2,11 @@ extern crate ethers;
 
 use std::{fs::File, io::prelude::*};
 
-use base64::{engine::general_purpose, Engine};
-use bip32::{
-    secp256k1::{PublicKey, SecretKey},
-    Error, Mnemonic, Prefix, XPrv,
-};
+use bip32::{Error, Mnemonic, Prefix, XPrv};
 use coins_bip39::English;
 use ethers::{prelude::rand, signers::MnemonicBuilder};
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
-use x25519_dalek::StaticSecret;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Address {
@@ -76,7 +70,7 @@ impl Peer {
     }
 
     // TODO remove this after testing
-    fn write_keyfile(&self, xprv: String) -> std::io::Result<()> {
+    fn _write_keyfile(&self, _xprv: String) -> std::io::Result<()> {
         let mut file = File::create(format!("{}.key", self.hid))?;
         file.write_all(self.xprv.as_bytes())?;
         Ok(())
@@ -137,37 +131,37 @@ impl Peer {
     // }
 }
 
-fn main() {
-    // Generate a random mnemonic
-    // let mnemonic = MnemonicBuilder::build_random(&self, &mut OsRng)
-    //     .entropy(Randomness::Strong)
-    //     .word_count(Words::Twelve)
-    //     .build()
-    //     .unwrap();
+// fn main() {
+// Generate a random mnemonic
+// let mnemonic = MnemonicBuilder::build_random(&self, &mut OsRng)
+//     .entropy(Randomness::Strong)
+//     .word_count(Words::Twelve)
+//     .build()
+//     .unwrap();
 
-    // Or, use an existing mnemonic
-    // let mnemonic = Mnemonic::from_phrase(
-    //     "YOUR_MNEMONIC_PHRASE_HERE"
-    // ).unwrap();
+// Or, use an existing mnemonic
+// let mnemonic = Mnemonic::from_phrase(
+//     "YOUR_MNEMONIC_PHRASE_HERE"
+// ).unwrap();
 
-    // println!("Mnemonic: {}", mnemonic.phrase());
+// println!("Mnemonic: {}", mnemonic.phrase());
 
-    // // Derive the wallet from the mnemonic
-    // let wallet = LocalWallet::from_mnemonic(mnemonic.clone(), None, 0, Network::Mainnet).unwrap();
+// // Derive the wallet from the mnemonic
+// let wallet = LocalWallet::from_mnemonic(mnemonic.clone(), None, 0, Network::Mainnet).unwrap();
 
-    // // Get the private key
-    // let private_key = wallet.private_key().to_pem().unwrap();
-    // println!("Private Key: {}", private_key.to_hex::<String>());
+// // Get the private key
+// let private_key = wallet.private_key().to_pem().unwrap();
+// println!("Private Key: {}", private_key.to_hex::<String>());
 
-    // // Get the public key
-    // let public_key = wallet.public_key().expect("Failed to get public key");
-    // println!("Public Key: {}", public_key.to_hex::<String>());
+// // Get the public key
+// let public_key = wallet.public_key().expect("Failed to get public key");
+// println!("Public Key: {}", public_key.to_hex::<String>());
 
-    // // Recover the wallet from the mnemonic
-    // let recovered_wallet = LocalWallet::from_mnemonic(mnemonic, None, 0, Network::Mainnet).unwrap();
-    // assert_eq!(wallet.address(), recovered_wallet.address());
-    // println!("Successfully recovered wallet from mnemonic");
-}
+// // Recover the wallet from the mnemonic
+// let recovered_wallet = LocalWallet::from_mnemonic(mnemonic, None, 0, Network::Mainnet).unwrap();
+// assert_eq!(wallet.address(), recovered_wallet.address());
+// println!("Successfully recovered wallet from mnemonic");
+// }
 
 #[cfg(test)]
 mod tests {

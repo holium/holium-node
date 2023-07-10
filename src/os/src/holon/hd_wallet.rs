@@ -74,6 +74,7 @@ impl HDWallet {
     pub fn new(seed: &[u8]) -> Self {
         let master_key = ExtendedPrivKey::with_seed(seed).expect("Failed to create root key");
         let master_key_bytes = master_key.private_key.secret_bytes();
+        // println!("seed: {:?}", hex::encode(seed));
 
         let key_chain = DefaultKeyChain::new(master_key);
 

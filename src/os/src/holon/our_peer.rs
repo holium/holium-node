@@ -3,7 +3,7 @@ use bip32::Mnemonic;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-use crate::conduit::ConduitPacket;
+use crate::modules::conduit::types::ConduitPacket;
 
 // project imports
 use super::{
@@ -121,7 +121,6 @@ impl OurPeer {
         if let Some(peer) = self.peers.get_mut(&hid) {
             match peer.state {
                 ForeignPeerState::Discovered => {
-                    // Simulate sending handshake
                     println!("Sending handshake to peer {}", hid);
                     peer.state = ForeignPeerState::HandshakeSent;
                     Ok(())
@@ -137,6 +136,13 @@ impl OurPeer {
     pub fn receive_handshake(&mut self, hid: String) -> Result<(), &'static str> {
         if let Some(peer) = self.peers.get_mut(&hid) {
             match peer.state {
+                ForeignPeerState::Discovered => {
+                    // Simulate sending handshake
+                    println!("Got a handshake from a discovered peer {}", hid);
+                    // I should send a handshake back
+                    self.send_handshake(hid.clone())?;
+                    Ok(())
+                }
                 ForeignPeerState::HandshakeSent => {
                     // Simulate receiving handshake
                     println!("Received handshake from peer {}", hid);
@@ -188,6 +194,8 @@ impl OurPeer {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::modules::conduit::types::ConduitPeer;
+    use hex;
 
     fn gen_foreign_peer_entry() -> ForeignPeerEntry {
         let mnemomic = Mnemonic::new("gas panel detail execute stairs crunch economy south truck lava mistake ladder source dry burger they barely off model abstract trim narrow they prosper", bip32::Language::English).unwrap();
@@ -215,6 +223,11 @@ mod tests {
         let mnemonic_phrase = Mnemonic::new("mention citizen dutch share final ship valid balance rack drastic mystery grief require fluid mom forget toast business snake laugh faint dentist ensure return", bip32::Language::English).unwrap();
         let password = "password".to_string();
 
+        // println!(
+        //     "{}",
+        //     hex::encode(mnemonic_phrase.to_seed(password.as_str()).as_bytes())
+        // );
+
         let our_peer = OurPeer::init(epoch, hid, address, mnemonic_phrase, password);
         our_peer
     }
@@ -236,5 +249,95 @@ mod tests {
             our_peer.peers.len(),
             our_peer.peers.capacity()
         )
+    }
+
+    #[tokio::test]
+    async fn test_peer_handshake() {
+        // Create two peers
+        let mut alice = OurPeer::init(
+            1,
+            "Alice".into(),
+            Address::new(1, "127.0.0.1".into(), 9030),
+            Mnemonic::new("mention citizen dutch share final ship valid balance rack drastic mystery grief require fluid mom forget toast business snake laugh faint dentist ensure return", bip32::Language::English).unwrap(),
+            "password".into(),
+        );
+        let mut bob = OurPeer::init(
+            1,
+            "Bob".into(),
+            Address::new(1, "127.0.0.1".into(), 9031),
+            Mnemonic::new("gas panel detail execute stairs crunch economy south truck lava mistake ladder source dry burger they barely off model abstract trim narrow they prosper", bip32::Language::English).unwrap(),
+            "password".into(),
+        );
+
+        // Alice discovers Bob and sends a handshake
+        alice.create_foreign_peer(ForeignPeerEntry {
+            epoch: 1,
+            hid: "Bob".into(),
+            address: Address::new(1, "127.0.0.1".into(), 9031),
+            pubkey: bob.hd_wallet.get_networking_pubkey(),
+        });
+
+        assert!(alice.send_handshake("Bob".into()).is_ok());
+
+        // Bob receives Alice's handshake
+        // assert!(bob.receive_handshake("Alice".into()).is_ok());
+
+        // Simulate a handshake packet from Alice to Bob
+        // let packet = ConduitPacket {
+        //     seq_num: 1,
+        //     from: ConduitPeer {
+        //         hid: "Alice".into(),
+        //         addr: Address::new(1, "127.0.0.1".into(), 9030),
+        //         pubkey: alice.hd_wallet.get_networking_pubkey(),
+        //     },
+        //     to: ConduitPeer {
+        //         hid: "Bob".into(),
+        //         addr: Address::new(1, "127.0.0.1".into(), 9031),
+        //         pubkey: bob.hd_wallet.get_networking_pubkey(),
+        //     },
+        //     data: vec![1, 2, 3],
+        //     signature: "placeholder".into(),
+        // };
+
+        // // Bob handles the packet from Alice
+        // assert!(bob.handle_packet(packet).await.is_ok());
+
+        // // Check that Bob has verified Alice
+        // assert!(matches!(
+        //     bob.peers.get("Alice").unwrap().state,
+        //     ForeignPeerState::Verified
+        // ));
+
+        // // Bob sends a handshake back to Alice
+        // assert!(bob.send_handshake("Alice".into()).is_ok());
+
+        // // Alice receives Bob's handshake
+        // assert!(alice.receive_handshake("Bob".into()).is_ok());
+
+        // // Simulate a handshake packet from Bob to Alice
+        // let packet = ConduitPacket {
+        //     seq_num: 1,
+        //     from: ConduitPeer {
+        //         hid: "Bob".into(),
+        //         addr: Address::new(1, "127.0.0.1".into(), 9030),
+        //         pubkey: bob.hd_wallet.get_networking_pubkey(),
+        //     },
+        //     to: ConduitPeer {
+        //         hid: "Alice".into(),
+        //         addr: Address::new(1, "127.0.0.1".into(), 9031),
+        //         pubkey: alice.hd_wallet.get_networking_pubkey(),
+        //     },
+        //     data: vec![1, 2, 3],
+        //     signature: "placeholder".into(),
+        // };
+
+        // // Alice handles the packet from Bob
+        // assert!(alice.handle_packet(packet).await.is_ok());
+
+        // // Check that Alice has verified Bob
+        // assert!(matches!(
+        //     alice.peers.get("Bob").unwrap().state,
+        //     ForeignPeerState::Verified
+        // ));
     }
 }

@@ -1,10 +1,12 @@
-use super::super::state::State;
+use async_trait::async_trait;
+
 use crate::action::Action;
-use crate::effect::{Effect, Effects};
+use crate::effect::Effect;
 use crate::global_state::GlobalStateChange;
-use crate::state::CloneState;
+use crate::states::{CloneState, State};
 use crate::OS;
-use std::any::Any;
+
+use super::{ActionResult, StateBox};
 
 #[derive(Clone)]
 pub struct Shutdown;
@@ -24,31 +26,24 @@ impl Shutdown {
     }
 }
 
+#[async_trait(?Send)]
 impl State for Shutdown {
-    fn perform_action(&self, action: Action, os_state: &OS) -> Vec<Effect> {
+    fn describe(&self) -> String {
+        String::from("shutdown")
+    }
+    async fn perform_action(&self, action: Action, _os_state: &OS) -> ActionResult {
         match action {
-            Action::Shutdown { path, data: _ } => {
+            Action::Shutdown() => {
                 self.shutdown_cleanly();
-                vec![Effect {
-                    path,
-                    effect: Effects::GlobalStateChange(GlobalStateChange::SystemShutdown),
-                    data: vec![],
-                }]
+                ActionResult::Ok(vec![Effect::GlobalStateChange(GlobalStateChange::Shutdown)])
             }
-            _ => vec![],
+            _ => ActionResult::Ok(vec![]),
         }
     }
-    // fn as_any(&self) -> &dyn std::any::Any {
-    //     self
-    // }
 }
 
 impl CloneState for Shutdown {
-    fn clone_box(&self) -> Box<dyn State> {
+    fn clone_box(&self) -> StateBox {
         Box::new(self.clone())
-    }
-
-    fn as_any(&self) -> &dyn Any {
-        self
     }
 }

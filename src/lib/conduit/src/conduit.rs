@@ -66,7 +66,7 @@ impl ConduitPacket {
 // -----------------------------
 #[derive(Debug)]
 pub struct ConduitRuntime {
-    our: ConduitPeer,
+    _our: ConduitPeer,
     peer: ConduitPeer,
     socket: UdpSocket,
     sent_packets: HashMap<u64, Vec<u8>>,
@@ -85,7 +85,7 @@ impl ConduitRuntime {
         let (tx, rx) = mpsc::channel(100);
 
         return Ok(ConduitRuntime {
-            our: our.clone(),
+            _our: our.clone(),
             peer: peer.clone(),
             socket,
             sent_packets: HashMap::new(),

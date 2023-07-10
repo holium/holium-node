@@ -1,6 +1,6 @@
 // crate imports
 use serde::{Deserialize, Serialize};
-use std::{fmt, rc::Rc};
+use std::{fmt, sync::Arc};
 use x25519_dalek::{PublicKey, SharedSecret, StaticSecret};
 
 // project imports
@@ -8,6 +8,8 @@ use super::{
     address::Address,
     state::{PrintStateChangeListener, StateChangeListener},
 };
+
+pub type PeerStateListener = Arc<dyn StateChangeListener + Send + Sync>;
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ForeignPeerState {
@@ -31,13 +33,13 @@ pub struct ForeignPeer {
     pub address: Address, // the ip address and port of the peer
     pub pubkey: [u8; 32], // the public key of the peer
     pub state: ForeignPeerState,
-    pub state_listener: Rc<dyn StateChangeListener>,
+    pub state_listener: PeerStateListener,
     shared_secret: Option<SharedSecret>,
 }
 
 impl ForeignPeer {
     pub fn new(epoch: i8, hid: String, address: Address, peer_pubkey: [u8; 32]) -> Self {
-        let listener = Rc::new(PrintStateChangeListener);
+        let listener = Arc::new(PrintStateChangeListener);
 
         return ForeignPeer {
             epoch,
