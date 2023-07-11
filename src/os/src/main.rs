@@ -42,6 +42,7 @@ impl OS {
             modules: OSModules {
                 passport: PassportModule::new(),
                 // conduit: ConduitManager::new(),
+                // db: DbModule::new(),
             },
             node_state: Box::new(initial_state),
             global_state: GlobalState::genesis(),
@@ -80,7 +81,7 @@ impl OS {
     /// let port: Option<i16> = Some(9030);
     /// os.boot(port);
     /// ```
-    ///     
+    ///
     pub async fn boot(&mut self, port: Option<i16>) {
         let transition = self
             .compute_transition(Action::Boot(BootArgs { port }))
@@ -110,7 +111,7 @@ impl OS {
         self.push_event(Event::Action(action.clone()));
 
         let effects = self.node_state.perform_action(action, self).await.unwrap();
-        
+
         // Extract new state from effects if it exists
         let new_state = effects.iter().find_map(|effect| match &effect {
             Effect::StateTransition(next_state) => Some((*next_state).clone_box()),

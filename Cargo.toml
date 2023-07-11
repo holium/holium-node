@@ -15,7 +15,7 @@ rooms = { path = "./src/lib/rooms" }
 urbit-api = { path = "./src/lib/urbit" }
 peers = { path = "./src/lib/peers" }
 conduit = { path = "./src/lib/conduit" }
-# 
+#
 bytes = "1.0"
 event-listener-primitives = "2.0.1"
 lazy_static = "1.4.0"
@@ -31,7 +31,7 @@ warp-sessions = "1.0.19"
 warp = "0.3.5"
 serde_derive = "1.0.163"
 
-# 
+#
 ethers = "2.0"
 use = "0.0.0"
 hex-literal = "0.4.1"
@@ -47,6 +47,12 @@ bip32 = "0.5.1"
 secp256k1 = "0.26.0"
 rand_core = "0.6.4"
 rand = "0.8.5"
+
+# db module
+anyhow = "1.0.71"
+rusqlite = "0.29.0"
+r2d2 = "0.8.10"
+r2d2_sqlite = "0.22.0"
 
 
 
