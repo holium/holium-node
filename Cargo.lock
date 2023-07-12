@@ -1695,6 +1695,7 @@ dependencies = [
  "fallible-streaming-iterator",
  "hashlink",
  "libsqlite3-sys",
+ "serde_json",
  "smallvec",
 ]
 
@@ -2273,10 +2274,13 @@ checksum = "c0edd1e5b14653f783770bce4a4dabb4a5108a5370a5f5d8cfe8710c361f6c8b"
 name = "urbit-api"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "bedrock-db",
  "eventsource-threaded",
  "futures",
  "rand",
  "reqwest 0.11.18",
+ "serde",
  "serde_json",
  "thiserror",
  "tokio 1.28.2",

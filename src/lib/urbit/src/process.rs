@@ -30,12 +30,12 @@ pub async fn get_pid_and_loopback(
     let pid_str = get_pid(&server_id).await?;
     let cmd_str = if cfg!(target_os = "macos") {
         format!(
-          "lsof -n -P -p {} |  grep '127.0.0.1' | grep urbit | grep -i listen | cut -d':' -f2 | cut -c -5 | tr -d '\n'", 
+          "lsof -n -P -p {} |  grep '127.0.0.1' | grep urbit | grep -i listen | cut -d':' -f2 | cut -c -5 | tr -d '\n'",
           pid_str
         )
     } else if cfg!(target_os = "linux") {
         format!(
-          "lsof -n -P -p {} |  grep '127.0.0.1' | grep -i listen | cut -d':' -f2 | cut -c -5 | tr -d '\n'", 
+          "lsof -n -P -p {} |  grep '127.0.0.1' | grep -i listen | cut -d':' -f2 | cut -c -5 | tr -d '\n'",
           pid_str
         )
     } else {
@@ -92,7 +92,7 @@ pub fn graceful_exit(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::runtime::Runtime;
+    // use tokio::runtime::Runtime;
 
     fn setup() {
         println!("Boot up a fake zod...");

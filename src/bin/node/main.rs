@@ -54,6 +54,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => println!("scry failed: {}", e),
     }
 
+    let db = bedrock_db::db::initialize(":memory:")?;
+
+    let ctx = urbit_api::CallContext {
+        db: db,
+        ship_interface: ship_interface.clone(),
+    };
+
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
 

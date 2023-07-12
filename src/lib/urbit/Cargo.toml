@@ -6,10 +6,13 @@ authors = ["Trent Gillham <6413077+drunkplato@users.noreply.github.com>", "Rober
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.71"
+bedrock-db = { path = "../../lib/db" }
 eventsource-threaded = "0.1.0"
 reqwest = { version = "0.11.18", features = ["blocking", "json"] }
 thiserror = "1.0.40"
 rand = "0.8.5"
 futures = "0.3"
+serde = "1.0.163"
 serde_json = "1.0.96"
 tokio = "1.28.1"
