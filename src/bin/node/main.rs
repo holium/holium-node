@@ -61,6 +61,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ship_interface: ship_interface.clone(),
     };
 
+    urbit_api::chat::load(&ctx).await?;
+
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
 
