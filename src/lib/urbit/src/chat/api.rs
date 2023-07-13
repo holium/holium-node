@@ -35,8 +35,9 @@ pub fn chat_router(
         .allow_methods(vec!["GET"]); // , "POST", "DELETE"]);
 
     // /db/messages/start-ms/{}
-    let chat_routes = warp::path!("hol" / "chat" / "messages" / "start-ms")
-        .and(warp::path::param())
+    let chat_routes = warp::path!("hol" / "chat" / "messages" / "start-ms" / String)
+        .and(warp::get())
+        // .and(warp::path::param())
         .and(with_call_context(ctx))
         .and_then(|param: String, ctx: CallContext| async {
             handle_chat_messages(ctx, param).await
@@ -50,16 +51,19 @@ pub async fn handle_chat_messages(
     ctx: CallContext,
     param: String,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    let timestamp = i64::from_str_radix(&param, 10);
-    if timestamp.is_err() {
-        println!(
-            "chat: [handle_chat_messages] invalid start-ms parameter {}",
-            param
-        );
-        return Err(reject::custom(InvalidParameter));
-    }
+    let timestamp = {
+        let ts = i64::from_str_radix(&param, 10);
+        if ts.is_err() {
+            println!(
+                "chat: [handle_chat_messages] invalid start-ms parameter {}",
+                param
+            );
+            return Err(reject::custom(InvalidParameter));
+        }
+        ts.unwrap()
+    };
     let data = {
-        let data = super::data::query_messages(&ctx, timestamp.unwrap()).await;
+        let data = super::data::query_messages(&ctx, timestamp).await;
         if data.is_err() {
             println!("chat: [handle_chat_messages] query_messages failed");
             return Err(reject::custom(DbError));

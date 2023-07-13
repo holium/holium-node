@@ -19,7 +19,7 @@ pub async fn query_messages(ctx: &CallContext, timestamp: i64) -> Result<Vec<Cha
                 updated_at,
                 received_at,
                 expires_at
-              ) FROM chat_messages
+              FROM chat_messages
               WHERE received_at >= ?1",
     )?;
 
