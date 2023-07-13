@@ -2,74 +2,8 @@ use std::{env, fs};
 
 use crate::CallContext;
 use anyhow::{bail, Result};
-use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
 
-#[derive(Debug, Deserialize, Serialize)]
-struct ReplyTo {
-    #[serde(rename = "msg-id")]
-    msg_id: String,
-    path: String,
-}
-
-/// derived from chat-db json format
-// {
-//   "tables": {
-//     "messages": [
-//       {
-//         "received-at": 1688763457727,
-//         "metadata": {},
-//         "reply-to": {
-//           "path": "/spaces/~lomder-librun/realm-forerunners/chats/0v2.68end.ets6m.29fgc.ntejl.jbeo7",
-//           "msg-id": "/~2023.7.7..19.57.10..a94a/~fasnut-famden"
-//         },
-//         "updated-at": 1688763453954,
-//         "msg-part-id": 0,
-//         "created-at": 1688763453954,
-//         "path": "/spaces/~lomder-librun/realm-forerunners/chats/0v2.68end.ets6m.29fgc.ntejl.jbeo7",
-//         "content-data": "2764-fe0f",
-//         "expires-at": null,
-//         "sender": "~tolwer-mogmer",
-//         "content-type": "react",
-//         "msg-id": "/~2023.7.7..20.57.33..f44a/~tolwer-mogmer"
-//       }
-//     ]
-//   }
-// }
-#[derive(Debug, Deserialize, Serialize)]
-struct ChatMessage {
-    #[serde(rename = "msg-id")]
-    msg_id: String,
-    #[serde(rename = "msg-part-id")]
-    msg_part_id: u64,
-    path: String,
-    metadata: JsonValue,
-    sender: String,
-    #[serde(rename = "reply-to")]
-    reply_to: JsonValue,
-    #[serde(rename = "content-type")]
-    content_type: String,
-    #[serde(rename = "content-data")]
-    content_data: String,
-    #[serde(rename = "created-at")]
-    created_at: u64,
-    #[serde(rename = "received-at")]
-    received_at: u64,
-    #[serde(rename = "updated-at")]
-    updated_at: u64,
-    #[serde(rename = "expires-at")]
-    expires_at: JsonValue, // can be null
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct ChatTable {
-    messages: Vec<ChatMessage>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-struct ChatTables {
-    tables: ChatTable,
-}
+use super::types::ChatTables;
 
 pub async fn generate_schema(ctx: &CallContext) -> Result<()> {
     // run thru all the sql files in the migrations folder in numerical

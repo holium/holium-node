@@ -1,3 +1,6 @@
+use std::convert::Infallible;
+
+use crate::CallContext;
 use warp::{http::StatusCode, reject, reply, Filter, Rejection, Reply};
 
 #[derive(Debug)]
@@ -23,8 +26,9 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, std::convert::In
     }
 }
 
-pub fn chat_router() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone
-{
+pub fn chat_router(
+    ctx: CallContext,
+) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     let cors = warp::cors()
         .allow_any_origin()
         .allow_headers(vec!["content-type"])
@@ -33,13 +37,19 @@ pub fn chat_router() -> impl Filter<Extract = (impl warp::Reply,), Error = warp:
     // /db/messages/start-ms/{}
     let chat_routes = warp::path!("hol" / "chat" / "messages" / "start-ms")
         .and(warp::path::param())
-        .and_then(|param: String| async { handle_chat_messages(param).await })
+        .and(with_call_context(ctx))
+        .and_then(|param: String, ctx: CallContext| async {
+            handle_chat_messages(ctx, param).await
+        })
         .recover(handle_rejection);
 
     chat_routes.with(cors)
 }
 
-pub async fn handle_chat_messages(param: String) -> Result<impl warp::Reply, warp::Rejection> {
+pub async fn handle_chat_messages(
+    ctx: CallContext,
+    param: String,
+) -> Result<impl warp::Reply, warp::Rejection> {
     let timestamp = i64::from_str_radix(&param, 10);
     if timestamp.is_err() {
         println!(
@@ -49,7 +59,7 @@ pub async fn handle_chat_messages(param: String) -> Result<impl warp::Reply, war
         return Err(reject::custom(InvalidParameter));
     }
     let data = {
-        let data = super::data::query_messages(timestamp.unwrap()).await;
+        let data = super::data::query_messages(&ctx, timestamp.unwrap()).await;
         if data.is_err() {
             println!("chat: [handle_chat_messages] query_messages failed");
             return Err(reject::custom(DbError));
@@ -57,4 +67,13 @@ pub async fn handle_chat_messages(param: String) -> Result<impl warp::Reply, war
         data.unwrap()
     };
     Ok(warp::reply::json(&data))
+}
+
+fn with_call_context(
+    ctx: CallContext,
+) -> impl Filter<Extract = (CallContext,), Error = Infallible> + Clone {
+    warp::any().map(move || CallContext {
+        db: ctx.db.clone(),
+        ship_interface: ctx.ship_interface.clone(),
+    })
 }

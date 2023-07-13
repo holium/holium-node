@@ -66,7 +66,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
-    let chat_route = urbit_api::chat::api::chat_router();
+    let chat_route = urbit_api::chat::api::chat_router(ctx);
 
     let proxy = reverse_proxy_filter("".to_string(), http_server_url);
     let login_route = warp::path!("~" / "login" / ..).and(reverse_proxy_filter(
