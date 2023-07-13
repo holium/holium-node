@@ -54,7 +54,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => println!("scry failed: {}", e),
     }
 
-    let db = bedrock_db::db::initialize(":memory:")?;
+    // create a new database file (bedrock.sqlite) in the ./src/lib/db/data folder
+    let db = bedrock_db::db::initialize("bedrock")?;
 
     let ctx = urbit_api::CallContext {
         db: db,

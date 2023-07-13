@@ -62,15 +62,23 @@ struct ChatMessage {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-struct ChatTables {
+struct ChatTable {
     messages: Vec<ChatMessage>,
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct ChatTables {
+    tables: ChatTable,
 }
 
 pub async fn generate_schema(ctx: &CallContext) -> Result<()> {
     // run thru all the sql files in the migrations folder in numerical
     //  order and execute them
-    println!("{:?}", env::current_dir());
-    let mut paths: Vec<_> = fs::read_dir("sql").unwrap().map(|r| r.unwrap()).collect();
+    println!("current directory: {:?}", env::current_dir().unwrap());
+    let mut paths: Vec<_> = fs::read_dir("src/lib/urbit/src/chat/sql")
+        .unwrap()
+        .map(|r| r.unwrap())
+        .collect();
     paths.sort_by_key(|dir| dir.path());
     // let conn = mgr.as_ref().unwrap().get().unwrap();
     ctx.db.get_conn()?.execute_batch("BEGIN TRANSACTION")?;
@@ -89,8 +97,8 @@ pub async fn import_data(ctx: &CallContext) -> Result<()> {
     let conn = ctx.db.get_conn()?;
 
     // retrieve the last timestamp value from the chat_messages table
-    let last_timestamp: Result<i32, _> = conn.query_row(
-        "SELECT MAX(received_at) AS last_timestamp FROM chat_messages",
+    let last_timestamp: Result<i64, _> = conn.query_row(
+        "SELECT COALESCE(MAX(received_at), 0) AS last_timestamp FROM chat_messages",
         [],
         |row| row.get(0),
     );
@@ -105,43 +113,48 @@ pub async fn import_data(ctx: &CallContext) -> Result<()> {
         )
         .await?;
 
-    let tables: ChatTables = serde_json::from_str(&response)?;
+    println!("deserializing chat messages retrieved from ship...");
 
-    let mut result = ctx.db.get_conn()?.execute_batch("BEGIN");
+    let root: ChatTables = serde_json::from_str(&response)?;
+
+    println!("processing chat messages...");
+
+    let mut result = conn.execute_batch("BEGIN");
 
     if result.is_err() {
         bail!("chat: error in load method. execute_batch failed to start transaction");
     }
 
-    for msg in tables.messages {
+    for msg in root.tables.messages {
+        println!("processing chat message: {:?}", msg);
         let mut stmt = conn.prepare(
             "REPLACE INTO chat_messages (
-            path,
-            msg_id,
-            msg_part_id,
-            content_type,
-            content_data,
-            reply_to,
-            metadata,
-            sender,
-            created_at,
-            updated_at,
-            expires_at,
-            received_at
-          ) VALUES (
-            :path,
-            :msg_id,
-            :msg_part_id,
-            :content_type,
-            :content_data,
-            :reply_to,
-            :metadata,
-            :sender,
-            :created_at,
-            :updated_at,
-            :expires_at,
-            :received_at
-          )",
+                    path,
+                    msg_id,
+                    msg_part_id,
+                    content_type,
+                    content_data,
+                    reply_to,
+                    metadata,
+                    sender,
+                    created_at,
+                    updated_at,
+                    received_at,
+                    expires_at
+                  ) VALUES (
+                    ?1,
+                    ?2,
+                    ?3,
+                    ?4,
+                    ?5,
+                    ?6,
+                    ?7,
+                    ?8,
+                    ?9,
+                    ?10,
+                    ?11,
+                    ?12
+                  )",
         )?;
         stmt.execute((
             msg.path,
@@ -154,15 +167,15 @@ pub async fn import_data(ctx: &CallContext) -> Result<()> {
             msg.sender,
             msg.created_at,
             msg.updated_at,
-            msg.expires_at,
             msg.received_at,
+            msg.expires_at,
         ))?;
     }
 
     result = conn.execute_batch("COMMIT");
 
     if result.is_err() {
-        bail!("chat: error in load method. execute_batch failed to start transaction");
+        bail!("chat: error in load method. execute_batch failed to commit transaction");
     }
 
     Ok(())

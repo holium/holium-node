@@ -8,3 +8,5 @@ hol-urbit
 ships
 hol.pid
 node_modules
+
+**.sqlite

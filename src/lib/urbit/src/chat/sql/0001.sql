@@ -10,7 +10,8 @@ create table if not exists chat_messages
     sender       text    NOT NULL,
     updated_at   INTEGER NOT NULL,
     created_at   INTEGER NOT NULL,
-    expires_at   INTEGER
+    expires_at   INTEGER,
+    received_at  INTEGER NOT NULL
 );
 
 create unique index if not exists chat_messages_path_msg_id_msg_part_id_uindex
