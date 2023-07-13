@@ -62,10 +62,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         ship_interface: ship_interface.clone(),
     };
 
-    urbit_api::chat::load(&ctx).await?;
+    urbit_api::chat::core::start(&ctx).await?;
 
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
+    let chat_route = urbit_api::chat::api::chat_router();
 
     let proxy = reverse_proxy_filter("".to_string(), http_server_url);
     let login_route = warp::path!("~" / "login" / ..).and(reverse_proxy_filter(
@@ -73,7 +74,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         format!("http://localhost:{}/~/login/", opt.urbit_port.clone()),
     ));
 
-    let routes = rooms_route.or(signaling_route).or(login_route);
+    let routes = rooms_route
+        .or(signaling_route)
+        .or(chat_route)
+        .or(login_route);
 
     let routes = routes
         .or(check_cookie(ship_interface).and(proxy))
