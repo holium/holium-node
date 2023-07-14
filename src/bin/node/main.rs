@@ -3,10 +3,12 @@ mod helpers;
 use std::convert::Infallible;
 
 use serde_derive::Serialize;
-use serde_json::Value;
+use serde_json::Value as JsonValue;
 use warp::http::uri::PathAndQuery;
 use warp::http::StatusCode;
 use warp::{http::Uri, reject, Filter, Rejection, Reply};
+
+use tokio::sync::mpsc::unbounded_channel;
 
 use structopt::StructOpt;
 use urbit_api::SafeShipInterface;
@@ -57,12 +59,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // create a new database file (bedrock.sqlite) in the ./src/lib/db/data folder
     let db = bedrock_db::db::initialize("bedrock")?;
 
+    let (sender, receiver) = unbounded_channel::<JsonValue>();
+
+    // create a call context that is used as a sort of global state for shared instances
     let ctx = urbit_api::CallContext {
         db: db,
         ship_interface: ship_interface.clone(),
+        sender: sender,
+        receiver: receiver,
     };
 
+    // start each 'module'
     urbit_api::chat::core::start(&ctx).await?;
+
+    // setup the websocket 'hub' which listens for new packets from ctx.receiver
+    //  and transmits the events to all client subscribers to the socket
+    let _ = urbit_api::ws::start(&ctx);
+
+    // subscribe to the ship and listen for events/updates
+    let _ = urbit_api::sub::start(&ctx);
 
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
@@ -177,7 +192,7 @@ fn reject_on_path(path: &str) -> warp::Rejection {
     }
 }
 
-fn handle_response(path: &str, data: Value) -> Result<(), warp::Rejection> {
+fn handle_response(path: &str, data: JsonValue) -> Result<(), warp::Rejection> {
     let is_valid = data
         .as_object()
         .unwrap()

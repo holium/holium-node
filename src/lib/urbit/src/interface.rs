@@ -54,6 +54,26 @@ impl SafeShipInterface {
         let api = self.api.lock().await;
         api.scry_to_str(app, path, mark).await
     }
+
+    pub async fn send_put_request(&self, url: &str, body: &Value) -> Result<Response> {
+        let api = self.api.lock().await;
+        api.send_put_request(url, body).await
+    }
+
+    pub async fn get_url(&self) -> String {
+        let api = self.api.lock().await;
+        api.url.clone()
+    }
+
+    pub async fn get_ship_name(&self) -> Option<String> {
+        let api = self.api.lock().await;
+        api.ship_name.clone()
+    }
+
+    pub async fn get_session_auth(&self) -> Option<HeaderValue> {
+        let api = self.api.lock().await;
+        api.session_auth.clone()
+    }
 }
 
 impl ShipInterface {

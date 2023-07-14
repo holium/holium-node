@@ -1,10 +1,10 @@
 use anyhow::Result;
+use bedrock_db::db::Db;
 
 use super::types::ChatMessage;
-use crate::CallContext;
 
-pub async fn query_messages(ctx: &CallContext, timestamp: i64) -> Result<Vec<ChatMessage>> {
-    let conn = ctx.db.get_conn()?;
+pub async fn query_messages(db: &Db, timestamp: i64) -> Result<Vec<ChatMessage>> {
+    let conn = db.get_conn()?;
 
     let mut stmt = conn.prepare(
         "SELECT path,

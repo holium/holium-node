@@ -16,3 +16,5 @@ pub mod lens;
 pub mod process;
 
 pub mod chat;
+pub mod sub;
+pub mod ws;

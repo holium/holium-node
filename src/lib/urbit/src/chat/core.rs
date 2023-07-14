@@ -124,5 +124,6 @@ pub async fn start(ctx: &CallContext) -> Result<()> {
     generate_schema(ctx).await?;
     // scry ship for latest chat data and add to database
     import_data(ctx).await?;
+    // super::sub::listen(ctx);
     Ok(())
 }
