@@ -4,7 +4,7 @@ use eventsource_threaded::EventSource;
 use rand::Rng;
 use reqwest::header::HeaderMap;
 use reqwest::Url;
-use serde_json::{from_str, json, Value as JsonValue};
+use serde_json::{json, Value as JsonValue};
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::{mpsc::UnboundedSender, Mutex};
@@ -27,15 +27,16 @@ pub async fn start(
     // Channel url
     let channel_url = format!("{}/~/channel/{}", &ctx.ship_interface.get_url().await, uid);
     // Opening channel request json
-    let mut body = from_str::<JsonValue>(r#"[]"#).unwrap();
-    body[0] = json!({
+    let body = json!([{
             "id": 1,
             "action": "poke",
             "ship": ctx.ship_interface.get_ship_name().await,
             "app": "hood",
             "mark": "helm-hi",
             "json": "Opening channel",
-    });
+    }]);
+
+    let _ = sender.send(body.clone());
 
     // Make the put request to create the channel.
     let resp = ctx

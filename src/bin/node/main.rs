@@ -103,11 +103,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let routes = rooms_route
         .or(signaling_route)
-        .or(ws_route)
+        // .or(ws_route)
         .or(chat_route)
         .or(login_route);
 
-    let routes = routes
+    let routes = ws_route
+        .or(routes)
         .or(check_cookie(ship_interface).and(proxy))
         .recover(handle_unauthorized)
         .recover(handle_rejection);

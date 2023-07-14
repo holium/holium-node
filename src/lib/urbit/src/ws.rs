@@ -95,6 +95,7 @@ async fn device_connected(ws: WebSocket, devices: Devices, ship_event_receiver: 
     //     device_message(my_id, msg, &devices).await;
     // }
 
+    println!("ws: [device_connected] waiting for ship event...");
     // let ship_event_receiver = UnboundedReceiverStream::new(ship_receiver.);
     while let Some(result) = ship_event_receiver.lock().await.recv().await {
         ship_message(my_id, result, &devices).await;
@@ -160,3 +161,26 @@ async fn device_disconnected(my_id: usize, devices: &Devices) {
 // ) -> impl Filter<Extract = (SafeShipInterface,), Error = Infallible> + Clone {
 //     warp::any().map(move || ctx.ship_interface.clone())
 // }
+
+#[cfg(test)]
+mod tests {
+    // use tungstenite::connect;
+    // use url::Url;
+    use websocket::ClientBuilder;
+    #[test]
+    // connect to this node's websocket server (for receiving events from a ship)
+    fn can_ws_connect() {
+        println!("ws: [test][can_ws_connect] connecting to node websocket...");
+        let client = ClientBuilder::new("ws://127.0.0.1:3030/ws")
+            .unwrap()
+            .connect_insecure()
+            .unwrap();
+        // let (mut socket, _response) =
+        //     connect(Url::parse("ws://localhost:3030/ws").unwrap()).expect("Can't connect");
+        // loop {
+        //     println!("ws: [test][can_ws_connect] waiting for ship events...");
+        //     let msg = socket.read_message().expect("Error reading message");
+        //     println!("Received: {}", msg);
+        // }
+    }
+}
