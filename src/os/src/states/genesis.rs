@@ -89,7 +89,7 @@ impl CloneState for Genesis {
 ///
 /// Example
 /// ```
-/// let (protocol, addr, port) = parse_address("/1/
+/// let (protocol, addr, port) = parse_address("/1/")
 /// ```
 fn parse_address(addr: &str) -> Result<(i8, String, i16), &str> {
     let mut parts = addr.split('/');

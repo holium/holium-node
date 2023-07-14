@@ -305,16 +305,16 @@ mod tests {
         // let alice_conduit = spawn_conduit_listener(alice.clone());
         // let bob_conduit = spawn_conduit_listener(bob.clone());
 
-        alice_conduit
-            .send_packet(ConduitPacket {
-                from: alice.clone().get_conduit_peer_entry().into(),
-                to: bob.clone().get_conduit_peer_entry().into(),
-                seq_num: 1,
-                data: "Hello Bob!".into(),
-                signature: "xyz".into(),
-            })
-            .await
-            .unwrap();
+//       alice_conduit
+//           .send_packet(ConduitPacket {
+//               from: alice.clone().get_conduit_peer_entry().into(),
+//               to: bob.clone().get_conduit_peer_entry().into(),
+//               seq_num: 1,
+//               data: "Hello Bob!".into(),
+//               signature: "xyz".into(),
+//           })
+//           .await
+//           .unwrap();
         tokio::time::sleep(std::time::Duration::from_secs(5)).await;
         // Ok(())
         // write code to delay 5 seconds

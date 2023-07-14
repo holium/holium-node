@@ -62,7 +62,7 @@ impl OS {
             boot_key: boot_key,
             bind_address: bind_address,
             identity_system: IdentitySystem::Azimuth(Azimuth {
-                contract: "0x223c067f8cf28ae173ee5cafea60ca44c335fecb".to_string(),
+                contract_address: "0x223c067f8cf28ae173ee5cafea60ca44c335fecb".to_string(),
                 network: "mainnet".to_string(),
             }),
         })];

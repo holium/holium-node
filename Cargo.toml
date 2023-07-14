@@ -68,7 +68,7 @@ bench = false
 [[bin]]
 name = "os"
 path = "src/os/src/main.rs"
-test = false
+test = true
 bench = false
 
 [features]
