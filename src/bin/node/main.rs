@@ -65,19 +65,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ctx = urbit_api::CallContext {
         db: db,
         ship_interface: ship_interface.clone(),
-        sender: sender,
-        receiver: receiver,
     };
 
+    //
     // start each 'module'
+    //  panic if any of these fail?
+    //
+
+    // start the chat 'module'
     urbit_api::chat::core::start(&ctx).await?;
+
+    //
+    // note:
+    // if websockets or ship subscription fails, the process should not start
+    //
 
     // setup the websocket 'hub' which listens for new packets from ctx.receiver
     //  and transmits the events to all client subscribers to the socket
-    let _ = urbit_api::ws::start(&ctx);
+    let ws_route = urbit_api::ws::start(receiver);
 
     // subscribe to the ship and listen for events/updates
-    let _ = urbit_api::sub::start(&ctx);
+    let res = urbit_api::sub::start(&ctx, sender).await;
+
+    if res.is_err() {
+        panic!("main: [main] error starting ship subscription");
+    }
 
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
@@ -91,6 +103,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let routes = rooms_route
         .or(signaling_route)
+        .or(ws_route)
         .or(chat_route)
         .or(login_route);
 

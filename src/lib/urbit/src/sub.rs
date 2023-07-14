@@ -4,14 +4,18 @@ use eventsource_threaded::EventSource;
 use rand::Rng;
 use reqwest::header::HeaderMap;
 use reqwest::Url;
-use serde_json::{from_str, json, Value};
+use serde_json::{from_str, json, Value as JsonValue};
 use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::sync::Mutex;
+use tokio::sync::{mpsc::UnboundedSender, Mutex};
 
 use crate::CallContext;
 
-pub async fn start(ctx: &CallContext) -> Result<()> {
+pub async fn start(
+    // (_, ship_interface, sender): (Db, SafeShipInterface, UnboundedSender<JsonValue>),
+    ctx: &CallContext,
+    sender: UnboundedSender<JsonValue>,
+) -> Result<()> {
     let mut rng = rand::thread_rng();
     // Defining the uid as UNIX time, or random if error
     let uid = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
@@ -23,7 +27,7 @@ pub async fn start(ctx: &CallContext) -> Result<()> {
     // Channel url
     let channel_url = format!("{}/~/channel/{}", &ctx.ship_interface.get_url().await, uid);
     // Opening channel request json
-    let mut body = from_str::<Value>(r#"[]"#).unwrap();
+    let mut body = from_str::<JsonValue>(r#"[]"#).unwrap();
     body[0] = json!({
             "id": 1,
             "action": "poke",
@@ -57,7 +61,7 @@ pub async fn start(ctx: &CallContext) -> Result<()> {
         }
         url_structured.unwrap()
     };
-    let sender = Arc::new(Mutex::new(ctx.sender.clone()));
+    let sender = Arc::new(Mutex::new(sender.clone()));
     tokio::spawn(async move {
         let receiver = EventSource::new(url_structured, headers);
         loop {
