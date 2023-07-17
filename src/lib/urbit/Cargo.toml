@@ -9,6 +9,7 @@ edition = "2021"
 anyhow = "1.0.71"
 bedrock-db = { path = "../../lib/db" }
 eventsource-threaded = "0.1.0"
+lazy_static = "1.4.0"
 reqwest = { version = "0.11.18", features = ["blocking", "json"] }
 thiserror = "1.0.40"
 rand = "0.8.5"
@@ -20,7 +21,7 @@ tokio = "1.28.1"
 tokio-stream = "0.1.14"
 warp = "0.3.5"
 warp-real-ip = "0.2.0"
-# tokio-tungstenite = "*"
+tokio-tungstenite = "*"
 tungstenite = {version = "0.19.0", features = ["native-tls"]}
 url = "2.2.2"
-websocket = "0.26.5"
+# websocket = "0.26.5"

@@ -11,6 +11,7 @@ default-run = "holon"
 
 [dependencies]
 bedrock-db = { path = "./src/lib/db" }
+# holon-log = { path = "./src/lib/log" }
 rooms = { path = "./src/lib/rooms" }
 urbit-api = { path = "./src/lib/urbit" }
 bytes = "1.0"

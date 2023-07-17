@@ -36,7 +36,7 @@ pub async fn start(
             "json": "Opening channel",
     }]);
 
-    let _ = sender.send(body.clone());
+    // let _ = sender.send(body.clone());
 
     // Make the put request to create the channel.
     let resp = ctx
@@ -66,6 +66,7 @@ pub async fn start(
     tokio::spawn(async move {
         let receiver = EventSource::new(url_structured, headers);
         loop {
+            println!("chat: [listen] waiting for ship event...");
             let msg = receiver.recv();
             let input = {
                 if msg.is_err() {
@@ -81,21 +82,23 @@ pub async fn start(
                 println!("chat: [listen] event received => {:?}", result);
                 result
             };
-            let event_type = {
+            let event_type = 'event_type: {
                 if input.event_type.is_none() {
-                    return "none";
+                    break 'event_type String::from("none");
                 }
-                input.event_type.unwrap();
+                input.event_type.unwrap()
             };
+            println!("chat: [listen] sending event to receiver...");
             let packet = json!({
               "id": input.id,
               "event_type": event_type,
-              "data": input.data,
+              "data": input.data
             });
             let send_result = sender.lock().await.send(packet);
             if send_result.is_err() {
                 println!("chat: [listen] error sending packet => {:?}", send_result);
             }
+            println!("chat: [listen] sending event to receiver complete");
         }
     });
     Ok(())
