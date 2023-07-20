@@ -101,7 +101,7 @@ impl Ship {
         Ok((ship_name.to_string(), session_auth.to_string()))
     }
 
-    pub async fn start_listener(&self, sender: UnboundedSender<JsonValue>) -> Result<JsonValue> {
+    pub async fn start_listener(&self, sender: UnboundedSender<JsonValue>) -> Result<()> {
         let mut rng = rand::thread_rng();
         // Defining the uid as UNIX time, or random if error
         let uid = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
@@ -140,7 +140,7 @@ impl Ship {
 
         let resp = resp.unwrap();
 
-        if resp.status().as_u16() != 200 {
+        if resp.status().as_u16() != 204 {
             bail!(
                 "ship: [start_listener] failed to open channel. {}",
                 resp.status().as_u16()
@@ -148,7 +148,7 @@ impl Ship {
         }
 
         // this is what actually gets returned to the caller
-        let return_value = resp.json().await?;
+        // let return_value = resp.json().await?;
 
         // Create cookie header with the ship session auth val
         let mut headers = HeaderMap::new();
@@ -168,23 +168,22 @@ impl Ship {
         tokio::spawn(async move {
             let receiver = EventSource::new(url_structured, headers);
             loop {
-                println!("chat: [listen] waiting for ship event...");
-
+                println!("ship: [listen] waiting for ship event...");
                 let msg = receiver.recv();
 
                 let input = {
                     if msg.is_err() {
-                        println!("chat: [listen] event receive error => {:?}", msg);
+                        println!("ship: [listen] event receive error => {:?}", msg);
                         continue;
                     }
                     let result = msg.unwrap();
                     if result.is_err() {
-                        println!("chat: [listen] event receive error => {:?}", result);
+                        println!("ship: [listen] event receive error => {:?}", result);
                         continue;
                     }
                     let result = result.unwrap();
                     if cfg!(feature = "debug_log") {
-                        println!("chat: [listen] event received => {:?}", result);
+                        println!("ship: [listen] event received => {:?}", result);
                     }
                     result
                 };
@@ -196,25 +195,23 @@ impl Ship {
                     input.event_type.unwrap()
                 };
 
-                if cfg!(feature = "debug_log") {
-                    println!("chat: [listen] sending event to receiver...");
-                }
-
                 let packet = json!({
                   "id": input.id,
                   "event_type": event_type,
                   "data": input.data
                 });
 
+                println!("ship: [listen] sending event to receiver => {}", packet);
+
                 let send_result = sender.send(packet);
 
                 if send_result.is_err() {
-                    println!("chat: [listen] error sending packet => {:?}", send_result);
+                    println!("ship: [listen] error sending packet => {:?}", send_result);
                 }
             }
         });
 
-        Ok(return_value)
+        Ok(())
     }
 
     // Send a put request using the `ShipInterface`
@@ -224,15 +221,37 @@ impl Ship {
         session_auth: &str,
         body: &JsonValue,
     ) -> Result<Response> {
-        let json = body.to_string();
-        let resp = self
+        // let json = body.to_string();
+        let json = serde_json::to_string(body)?;
+
+        println!(
+            "ship: [start_listener] opening channel [{}, {}, {}]...",
+            url, session_auth, json
+        );
+
+        let req = self
             .req_client
             .put(url)
-            .header(COOKIE, session_auth)
+            .header(COOKIE, HeaderValue::from_str(session_auth)?)
             .header("Content-Type", "application/json")
             .body(json);
 
-        Ok(resp.send().await?)
+        let res = req.send().await;
+
+        if res.is_err() {
+            bail!("ship: [send_put_request] request failed");
+        }
+
+        let res = res.unwrap();
+
+        if res.status().as_u16() != 204 {
+            bail!(
+                "ship: [send_put_request] request failed. {}",
+                res.status().as_u16()
+            );
+        }
+
+        Ok(res)
     }
 
     /// Sends a scry to the ship
@@ -269,7 +288,7 @@ impl Ship {
                 }
                 break 'response_json result.json().await.unwrap();
             }
-            if result.status() != 204 {
+            if result.status() != 200 {
                 println!("ship: [post] failed to post payload");
                 return Err(UrbitAPIError::StatusCode(result.status().as_u16()));
             }
