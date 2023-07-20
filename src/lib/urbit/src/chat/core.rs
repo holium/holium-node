@@ -1,6 +1,6 @@
 use std::{env, fs};
 
-use crate::CallContext;
+use crate::context::CallContext;
 use anyhow::{bail, Result};
 
 use super::types::ChatTables;
@@ -39,8 +39,8 @@ pub async fn import_data(ctx: &CallContext) -> Result<()> {
 
     // scry the ship for chat messages
     let response = ctx
-        .ship_interface
-        .scry_to_str(
+        .ship
+        .scry(
             "chat-db",
             format!("/db/messages/start-ms/{}", last_timestamp?).as_str(),
             "json",
@@ -49,7 +49,7 @@ pub async fn import_data(ctx: &CallContext) -> Result<()> {
 
     println!("deserializing chat messages retrieved from ship...");
 
-    let root: ChatTables = serde_json::from_str(&response)?;
+    let root: ChatTables = serde_json::from_value(response)?;
 
     println!("processing chat messages...");
 

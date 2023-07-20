@@ -1,3 +1,16 @@
+create table if not exists packets
+(
+    /* auto increment ROWID */
+    id           INTEGER PRIMARY KEY,
+    /*
+        full action payload
+        @see: https://developers.urbit.org/reference/arvo/eyre/external-api-ref#actions
+    */
+    content      TEXT NOT NULL,
+    /* when the holon actually received the packet on the websocket channel */
+    received_at  INTEGER NOT NULL
+);
+
 create table if not exists chat_messages
 (
     path         TEXT    not null,

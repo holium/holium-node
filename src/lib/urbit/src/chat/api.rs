@@ -1,7 +1,6 @@
 use std::convert::Infallible;
 
-use crate::CallContext;
-use bedrock_db::db::Db;
+use crate::context::CallContext;
 use warp::{http::StatusCode, reject, reply, Filter, Rejection, Reply};
 
 #[derive(Debug)]
@@ -39,15 +38,17 @@ pub fn chat_router(
     let chat_routes = warp::path!("hol" / "chat" / "messages" / "start-ms" / String)
         .and(warp::get())
         // .and(warp::path::param())
-        .and(with_db(ctx))
-        .and_then(|param: String, db: Db| async { handle_chat_messages(db, param).await })
+        .and(with_context(ctx))
+        .and_then(|param: String, context: CallContext| async {
+            handle_chat_messages(context, param).await
+        })
         .recover(handle_rejection);
 
     chat_routes.with(cors)
 }
 
 pub async fn handle_chat_messages(
-    db: Db,
+    context: CallContext,
     param: String,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let timestamp = {
@@ -62,7 +63,7 @@ pub async fn handle_chat_messages(
         ts.unwrap()
     };
     let data = {
-        let data = super::data::query_messages(&db, timestamp).await;
+        let data = super::data::query_messages(&context.db, timestamp).await;
         if data.is_err() {
             println!("chat: [handle_chat_messages] query_messages failed");
             return Err(reject::custom(DbError));
@@ -72,6 +73,8 @@ pub async fn handle_chat_messages(
     Ok(warp::reply::json(&data))
 }
 
-fn with_db(ctx: CallContext) -> impl Filter<Extract = (Db,), Error = Infallible> + Clone {
-    warp::any().map(move || ctx.db.clone())
+fn with_context(
+    ctx: CallContext,
+) -> impl Filter<Extract = (CallContext,), Error = Infallible> + Clone {
+    warp::any().map(move || ctx.clone())
 }

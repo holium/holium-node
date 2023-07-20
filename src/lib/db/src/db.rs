@@ -9,6 +9,21 @@ pub struct Db {
 }
 
 impl Db {
+    pub fn new(db_name: &str) -> Db {
+        let mut db_path = db_name.to_string();
+        if db_path != ":memory:" {
+            db_path = format!("src/lib/db/data/{}.sqlite", db_name);
+        }
+        let manager = SqliteConnectionManager::file(db_path.as_str());
+        let pool = Pool::new(manager);
+        if pool.is_err() {
+            panic!("libdb: [new] Pool::new call failed");
+        }
+        Db {
+            pool: pool.unwrap(),
+        }
+    }
+
     pub fn get_conn(&self) -> Result<PooledConnection<SqliteConnectionManager>> {
         let pool = self.pool.get()?;
         return Ok(pool);
