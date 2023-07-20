@@ -20,6 +20,7 @@ use warp_reverse_proxy::reverse_proxy_filter;
 use crate::helpers::wait_for_server;
 
 use urbit_api::context::{CallContext, NodeContext};
+use urbit_api::db::Db;
 
 #[derive(StructOpt)]
 pub struct HolAPI {
@@ -60,13 +61,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     // create a new database file (bedrock.sqlite) in the ./src/lib/db/data folder
-    let db = bedrock_db::db::initialize("bedrock")?;
+    let db_pool = bedrock_db::initialize_pool("bedrock")?;
 
     let (sender, receiver) = unbounded_channel::<JsonValue>();
 
     // create a call context that is used as a sort of global state for shared instances
     let context: CallContext = NodeContext::to_call_context(NodeContext {
-        db: db,
+        db: Db { pool: db_pool },
         ship: ship,
         // used to send data from the EventSource (task/thread/loop) to the receiver
         sender: sender,

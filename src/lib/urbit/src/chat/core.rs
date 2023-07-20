@@ -15,20 +15,23 @@ pub async fn generate_schema(ctx: &CallContext) -> Result<()> {
         .collect();
     paths.sort_by_key(|dir| dir.path());
     // let conn = mgr.as_ref().unwrap().get().unwrap();
-    ctx.db.get_conn()?.execute_batch("BEGIN TRANSACTION")?;
+    ctx.db.pool.get_conn()?.execute_batch("BEGIN TRANSACTION")?;
     for path in paths {
         println!("processing sql file '{}'...", path.path().display());
         // read file contents and execute contents
         let sql = fs::read_to_string(path.path())?;
-        ctx.db.get_conn()?.execute_batch(sql.as_str())?;
+        ctx.db.pool.get_conn()?.execute_batch(sql.as_str())?;
     }
-    ctx.db.get_conn()?.execute_batch("COMMIT TRANSACTION")?;
+    ctx.db
+        .pool
+        .get_conn()?
+        .execute_batch("COMMIT TRANSACTION")?;
     Ok(())
 }
 
 pub async fn import_data(ctx: &CallContext) -> Result<()> {
     // grab a connection from the connection pool
-    let conn = ctx.db.get_conn()?;
+    let conn = ctx.db.pool.get_conn()?;
 
     // retrieve the last timestamp value from the chat_messages table
     let last_timestamp: Result<i64, _> = conn.query_row(

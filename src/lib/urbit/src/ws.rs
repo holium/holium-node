@@ -1,17 +1,13 @@
 // #![deny(warnings)]
+use futures_util::{SinkExt, StreamExt, TryFutureExt};
 use lazy_static::lazy_static;
+use serde::{Deserialize, Serialize};
+use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
-use std::time::SystemTime;
-
-use anyhow::Result;
-
-use futures_util::{SinkExt, StreamExt, TryFutureExt};
-use serde::{Deserialize, Serialize};
-use serde_json::Value as JsonValue;
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use warp::ws::{Message, WebSocket};
@@ -186,7 +182,8 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext) {
     let packet = packet.unwrap();
 
     // 1) save packet payload to db
-    let result = save_packet(&context, &packet).await;
+    // let result = context.db.lsave_packet(&context, &packet).await;
+    let result = context.db.save_packet(&packet);
     if result.is_err() {
         println!("ws: [device_message] save_packet_string failed");
         return;
@@ -261,22 +258,22 @@ async fn on_device_disconnected(my_id: usize) {
     CONNECTED_DEVICES.write().await.remove(&my_id);
 }
 
-async fn save_packet(ctx: &CallContext, packet: &JsonValue) -> Result<()> {
-    let ts = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-    let ts: u128 = ts.as_millis();
-    let conn = ctx.db.get_conn()?;
-    let mut stmt = conn.prepare(
-        "INSERT INTO packets (
-          content,
-          received_at
-        ) VALUES (
-          ?1,
-          ?2
-        )",
-    )?;
-    stmt.execute((packet, ts as i64))?;
-    Ok(())
-}
+// async fn save_packet(ctx: &CallContext, packet: &JsonValue) -> Result<()> {
+//     let ts = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
+//     let ts: u128 = ts.as_millis();
+//     let conn = ctx.db.get_conn()?;
+//     let mut stmt = conn.prepare(
+//         "INSERT INTO packets (
+//           content,
+//           received_at
+//         ) VALUES (
+//           ?1,
+//           ?2
+//         )",
+//     )?;
+//     stmt.execute((packet, ts as i64))?;
+//     Ok(())
+// }
 
 // fn with_db(ctx: CallContext) -> impl Filter<Extract = (Db,), Error = Infallible> + Clone {
 //     warp::any().map(move || ctx.db.clone())

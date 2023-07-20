@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::api::Ship;
-use bedrock_db::db::Db;
+use crate::db::Db;
 use serde_json::Value as JsonValue;
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender},
