@@ -13,20 +13,22 @@ pub struct Db {
 }
 
 impl Db {
-    pub fn save_packet(&self, packet: &JsonValue) -> Result<()> {
+    pub fn save_packet(&self, source: &str, packet: &JsonValue) -> Result<()> {
         let ts = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-        let ts: u128 = ts.as_micros();
+        let ts: u128 = ts.as_millis();
         let conn = self.pool.get_conn()?;
         let mut stmt = conn.prepare(
             "INSERT INTO packets (
+              source,
               content,
               received_at
             ) VALUES (
               ?1,
-              ?2
+              ?2,
+              ?3
             )",
         )?;
-        stmt.execute((packet, ts as i64))?;
+        stmt.execute((source, packet, ts as i64))?;
         Ok(())
     }
 }

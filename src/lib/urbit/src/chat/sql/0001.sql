@@ -2,6 +2,8 @@ create table if not exists packets
 (
     /* auto increment ROWID */
     id           INTEGER PRIMARY KEY,
+    /* source of the packet: ws or ship */
+    source       TEXT,
     /*
         full action payload
         @see: https://developers.urbit.org/reference/arvo/eyre/external-api-ref#actions

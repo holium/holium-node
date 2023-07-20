@@ -11,17 +11,12 @@ use reqwest::{Client, Response, StatusCode};
 use crate::error::{Result as UrbitResult, UrbitAPIError};
 use rand::Rng;
 
-use eventsource_threaded::EventSource;
-
-use reqwest::header::HeaderMap;
-
-use tokio::sync::mpsc::UnboundedSender;
-
 #[derive(Debug, Clone)]
 pub struct Ship {
     /// The URL of the ship given as `http://ip:port` such as
     /// `http://0.0.0.0:8080`.
     pub url: String,
+    pub channel_url: Arc<RwLock<Option<String>>>,
     // ship code
     ship_code: String,
     /// The session auth string header value
@@ -36,6 +31,7 @@ impl Ship {
     pub async fn new(url: &str, ship_code: &str) -> Result<Ship> {
         let result = Ship {
             url: url.to_string(),
+            channel_url: Arc::new(RwLock::new(None)),
             session_auth: Arc::new(RwLock::new(None)),
             ship_name: Arc::new(RwLock::new(None)),
             req_client: Client::new(),
@@ -101,17 +97,28 @@ impl Ship {
         Ok((ship_name.to_string(), session_auth.to_string()))
     }
 
-    pub async fn start_listener(&self, sender: UnboundedSender<JsonValue>) -> Result<()> {
+    pub async fn open_channel(&self) -> Result<(Url, String, String)> {
         let mut rng = rand::thread_rng();
         // Defining the uid as UNIX time, or random if error
         let uid = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
-            Ok(n) => n.as_micros(),
+            Ok(n) => n.as_millis(),
             Err(_) => rng.gen(),
         }
         .to_string();
 
         // Channel url
         let channel_url = format!("{}/~/channel/{}", &self.url, uid);
+
+        // Create the receiver
+        let url_structured = {
+            let url_structured = Url::parse(&channel_url); //.map_err(|_| UrbitAPIError::FailedToCreateNewChannel)?;
+
+            if url_structured.is_err() {
+                bail!("chat: [listen] error parsing channel url {}", channel_url)
+            }
+
+            url_structured.unwrap()
+        };
 
         let session_auth = { self.session_auth.read().await };
         let session_auth = session_auth.as_ref().unwrap();
@@ -147,71 +154,13 @@ impl Ship {
             );
         }
 
-        // this is what actually gets returned to the caller
-        // let return_value = resp.json().await?;
+        self.channel_url.write().await.replace(channel_url);
 
-        // Create cookie header with the ship session auth val
-        let mut headers = HeaderMap::new();
-        headers.append("cookie", HeaderValue::from_str(session_auth)?);
-
-        // Create the receiver
-        let url_structured = {
-            let url_structured = Url::parse(&channel_url); //.map_err(|_| UrbitAPIError::FailedToCreateNewChannel)?;
-
-            if url_structured.is_err() {
-                bail!("chat: [listen] error parsing channel url {}", channel_url)
-            }
-
-            url_structured.unwrap()
-        };
-
-        tokio::spawn(async move {
-            let receiver = EventSource::new(url_structured, headers);
-            loop {
-                println!("ship: [listen] waiting for ship event...");
-                let msg = receiver.recv();
-
-                let input = {
-                    if msg.is_err() {
-                        println!("ship: [listen] event receive error => {:?}", msg);
-                        continue;
-                    }
-                    let result = msg.unwrap();
-                    if result.is_err() {
-                        println!("ship: [listen] event receive error => {:?}", result);
-                        continue;
-                    }
-                    let result = result.unwrap();
-                    if cfg!(feature = "debug_log") {
-                        println!("ship: [listen] event received => {:?}", result);
-                    }
-                    result
-                };
-
-                let event_type = 'event_type: {
-                    if input.event_type.is_none() {
-                        break 'event_type String::from("none");
-                    }
-                    input.event_type.unwrap()
-                };
-
-                let packet = json!({
-                  "id": input.id,
-                  "event_type": event_type,
-                  "data": input.data
-                });
-
-                println!("ship: [listen] sending event to receiver => {}", packet);
-
-                let send_result = sender.send(packet);
-
-                if send_result.is_err() {
-                    println!("ship: [listen] error sending packet => {:?}", send_result);
-                }
-            }
-        });
-
-        Ok(())
+        Ok((
+            url_structured,
+            ship_name.to_string(),
+            session_auth.to_string(),
+        ))
     }
 
     // Send a put request using the `ShipInterface`
@@ -301,16 +250,18 @@ impl Ship {
     //   originating from connected devices
     // this method will attempt to refresh the urbit auth cookie if the
     //   request fails with a 403 (forbidden).
-    pub async fn post(&self, payload: &JsonValue) -> Result<JsonValue> {
+    pub async fn post(&self, payload: &JsonValue) -> Result<()> {
         let session_auth = self.session_auth.read().await;
         if session_auth.is_none() {
             bail!("ship: [post] must call login");
         }
         let session_auth = session_auth.as_ref().unwrap();
-        let ship_response_as_json: JsonValue = 'response_json: {
+        let channel_url = { self.channel_url.read().await };
+        let channel_url = channel_url.as_ref().unwrap();
+        let post_result: () = 'result: {
             let res = self
                 .req_client
-                .post(&self.url)
+                .post(channel_url)
                 .header(COOKIE, session_auth)
                 .header("Content-Type", "application/json")
                 .json(&payload)
@@ -325,22 +276,25 @@ impl Ship {
                 }
                 let res = self
                     .req_client
-                    .post(&self.url)
+                    .post(channel_url)
                     .header(COOKIE, session_auth)
                     .header("Content-Type", "application/json")
                     .json(&payload)
                     .send()
                     .await?;
-                if res.status() != 204 {
-                    bail!("ship: [post] retry failed")
+                if res.status().as_u16() != 204 {
+                    bail!("ship: [post] retry failed. {}", res.status().as_u16());
                 }
-                break 'response_json res.json().await.unwrap();
+                break 'result ();
             }
-            if res.status() != 204 {
-                bail!("ship: [post] failed to post payload")
+            if res.status().as_u16() != 204 {
+                bail!(
+                    "ship: [post] failed to post payload. {}",
+                    res.status().as_u16()
+                )
             }
-            res.json().await.unwrap()
+            ()
         };
-        Ok(ship_response_as_json)
+        Ok(post_result)
     }
 }

@@ -7,7 +7,17 @@ const nodeUrl = '127.0.0.1:3030';
 export default function WebSocketClient() {
   const [url, setUrl] = useState('');
   const [status, setStatus] = useState('disconnected');
+  const [payload, setPayload] = useState('');
   const socketRef = useRef();
+
+  const sendPayload = () => {
+    try {
+      let parsedPayload = unserialize(payload);
+      socketRef.current.send(serialize(parsedPayload));
+    } catch (e) {
+      console.log('invalid json', e);
+    }
+  };
 
   const connect = (wsUrl) => {
     //`${ws}${nodeUrl}/hol/ws`
@@ -112,6 +122,29 @@ export default function WebSocketClient() {
           </button>
         </div>
       </header>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          alignItems: 'center',
+        }}
+      >
+        <textarea
+          style={{ marginTop: 16 }}
+          type='text'
+          cols={50}
+          rows={10}
+          placeholder='Enter message payload'
+          value={payload}
+          onChange={(evt) => {
+            evt.stopPropagation();
+            // text area value
+            setPayload(evt.target.value);
+          }}
+        />
+        <button onClick={() => sendPayload()}>Send payload</button>
+      </div>
     </div>
   ));
 }

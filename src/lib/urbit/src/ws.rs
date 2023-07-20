@@ -166,7 +166,7 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
 
     // 1) save packet payload to db
     // let result = context.db.lsave_packet(&context, &packet).await;
-    let result = context.db.save_packet(&packet);
+    let result = context.db.save_packet("ws", &packet);
     if result.is_err() {
         println!("ws: [device_message] save_packet_string failed");
         return;
@@ -174,11 +174,15 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
 
     // 2) post action payload to ship. event source receiver will relay any updates/effects
     //     back to connected devices
-    let result = { context.ship.post(&packet).await };
+    // is this the packet an action payload? if so, post to ship.
+    let actions: serde_json::Result<Vec<ShipAction>> = serde_json::from_str(msg);
+    if actions.is_ok() {
+        let result = context.ship.post(&packet).await;
 
-    if result.is_err() {
-        println!("ws: [device_message] proxy.post call failed");
-        return;
+        if result.is_err() {
+            println!("ws: [device_message] proxy.post call failed. {:?}", result);
+            return;
+        }
     }
 
     // send the proxy post response back to the originating device over websocket
@@ -241,46 +245,14 @@ async fn on_device_disconnected(my_id: usize, devices: &Devices) {
     devices.write().await.remove(&my_id);
 }
 
-// async fn save_packet(ctx: &CallContext, packet: &JsonValue) -> Result<()> {
-//     let ts = SystemTime::now().duration_since(SystemTime::UNIX_EPOCH)?;
-//     let ts: u128 = ts.as_millis();
-//     let conn = ctx.db.get_conn()?;
-//     let mut stmt = conn.prepare(
-//         "INSERT INTO packets (
-//           content,
-//           received_at
-//         ) VALUES (
-//           ?1,
-//           ?2
-//         )",
-//     )?;
-//     stmt.execute((packet, ts as i64))?;
-//     Ok(())
-// }
-
-// fn with_db(ctx: CallContext) -> impl Filter<Extract = (Db,), Error = Infallible> + Clone {
-//     warp::any().map(move || ctx.db.clone())
-// }
-
-// fn with_ship(
-//     ctx: CallContext,
-// ) -> impl Filter<Extract = (SafeShipInterface,), Error = Infallible> + Clone {
-//     warp::any().map(move || ctx.ship_interface.clone())
-// }
-
 #[cfg(test)]
 mod tests {
     use tungstenite::connect;
     use url::Url;
-    // use websocket::ClientBuilder;
     #[test]
     // connect to this node's websocket server (for receiving events from a ship)
     fn can_ws_connect() {
         println!("ws: [test][can_ws_connect] connecting to node websocket...");
-        // let client = ClientBuilder::new("ws://127.0.0.1:3030/ws")
-        //     .unwrap()
-        //     .connect_insecure()
-        //     .unwrap();
         let (mut socket, _response) =
             connect(Url::parse("ws://127.0.0.1:3030/ws").unwrap()).expect("Can't connect");
         loop {
