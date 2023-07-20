@@ -1,6 +1,6 @@
 // #![deny(warnings)]
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
-use lazy_static::lazy_static;
+// use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
@@ -25,9 +25,9 @@ static NEXT_DEVICE_ID: AtomicUsize = AtomicUsize::new(1);
 type DeviceMap = HashMap<usize, mpsc::UnboundedSender<Message>>;
 type Devices = Arc<RwLock<DeviceMap>>;
 
-lazy_static! {
-    static ref CONNECTED_DEVICES: Devices = Arc::new(RwLock::new(HashMap::new()));
-}
+// lazy_static! {
+//     static ref CONNECTED_DEVICES: Devices = Arc::new(RwLock::new(HashMap::new()));
+// }
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ShipAction {
@@ -41,18 +41,10 @@ pub struct ShipAction {
 
 pub fn start(
     context: CallContext,
-    // ship_proxy: Ship,
-    // receiver: UnboundedReceiver<JsonValue>,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     // Turn our "state" into a new Filter...
-
-    // let devices = Devices::default();
-    // let devices = warp::any().map(move || devices.clone());
-
-    // let with_ship_proxy = warp::any().map(move || ship_proxy.clone());
-
-    // let receiver = Arc::new(Mutex::new(receiver));
-    // let ship_event_receiver = warp::any().map(move || receiver.clone());
+    let devices = Devices::default();
+    let devices = warp::any().map(move || devices.clone());
 
     let with_context = warp::any().map(move || context.clone());
 
@@ -60,29 +52,19 @@ pub fn start(
     let handler = warp::path!("ws")
         // The `ws()` filter will prepare Websocket handshake...
         .and(warp::ws())
-        // .and(devices)
-        // .and(with_ship_proxy)
-        // .and(ship_event_receiver)
         .and(with_context)
-        .map(
-            |ws: warp::ws::Ws,
-             context: CallContext /*devices, ship_proxy: Ship,
-                                  ship_event_receiver: ShipReceiver*/| {
-                // This will call our function if the handshake succeeds.
-                ws.on_upgrade(move |socket| {
-                    device_connected(
-                        socket,
-                        context.clone(), /*ship_proxy, ship_event_receiver*/
-                    )
-                })
-            },
-        );
+        .and(devices)
+        .map(|ws: warp::ws::Ws, context: CallContext, devices| {
+            // This will call our function if the handshake succeeds.
+            ws.on_upgrade(move |socket| device_connected(socket, devices, context.clone()))
+        });
 
     handler
 }
 
 async fn device_connected(
     ws: WebSocket,
+    devices: Devices,
     context: CallContext, /*ship_event_receiver: ShipReceiver*/
 ) {
     // Use a counter to assign a new unique ID for this user.
@@ -111,9 +93,10 @@ async fn device_connected(
     });
 
     // Save the sender in our list of connected devices.
-    CONNECTED_DEVICES.write().await.insert(my_id, tx);
+    devices.write().await.insert(my_id, tx);
 
     let device_ws_rx_context = context.clone();
+    let ws_rx_devices = devices.clone();
 
     // now spawn a task to listen for incoming messages from connected devices
     tokio::task::spawn(async move {
@@ -128,7 +111,7 @@ async fn device_connected(
                 }
             };
             // load a handler for the message
-            on_device_message(my_id, msg, &device_ws_rx_context).await;
+            on_device_message(my_id, msg, &device_ws_rx_context, &ws_rx_devices).await;
         }
     });
 
@@ -144,18 +127,18 @@ async fn device_connected(
             "ws: [device_connected] received event from ship => [{}, {}]",
             my_id, result
         );
-        on_ship_message(my_id, result).await;
+        on_ship_message(my_id, result, &devices).await;
     }
     //
     /////////////////////
 
     // device_ws_rx stream will keep processing as long as the device stays
     // connected. Once they disconnect, then...
-    on_device_disconnected(my_id).await;
+    on_device_disconnected(my_id, &devices).await;
 }
 
 ///
-async fn on_device_message(my_id: usize, msg: Message, context: &CallContext) {
+async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, devices: &Devices) {
     // Skip any non-Text messages...
     let msg = if let Ok(s) = msg.to_str() {
         s
@@ -199,7 +182,7 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext) {
     }
 
     // send the proxy post response back to the originating device over websocket
-    let tx = CONNECTED_DEVICES.read();
+    let tx = devices.read();
     let tx = tx.await;
     let tx = tx.get(&my_id);
     {
@@ -227,7 +210,7 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext) {
     // }
 
     // New message from this user, send it to everyone else (except same uid)...
-    for (&uid, tx) in CONNECTED_DEVICES.read().await.iter() {
+    for (&uid, tx) in devices.read().await.iter() {
         if my_id == uid {
             if let Err(_disconnected) = tx.send(Message::text(msg.clone())) {
                 // The tx is disconnected, our `user_disconnected` code
@@ -238,9 +221,9 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext) {
     }
 }
 
-async fn on_ship_message(my_id: usize, msg: JsonValue) {
+async fn on_ship_message(my_id: usize, msg: JsonValue, devices: &Devices) {
     // New message from the ship, send it to all connected devices (except same uid)...
-    for (&uid, tx) in CONNECTED_DEVICES.read().await.iter() {
+    for (&uid, tx) in devices.read().await.iter() {
         if my_id != uid {
             if let Err(_disconnected) = tx.send(Message::text(msg.as_str().unwrap())) {
                 // The tx is disconnected, our `user_disconnected` code
@@ -251,11 +234,11 @@ async fn on_ship_message(my_id: usize, msg: JsonValue) {
     }
 }
 
-async fn on_device_disconnected(my_id: usize) {
+async fn on_device_disconnected(my_id: usize, devices: &Devices) {
     eprintln!("good bye user: {}", my_id);
 
     // Stream closed up, so remove from the user list
-    CONNECTED_DEVICES.write().await.remove(&my_id);
+    devices.write().await.remove(&my_id);
 }
 
 // async fn save_packet(ctx: &CallContext, packet: &JsonValue) -> Result<()> {
