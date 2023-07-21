@@ -59,12 +59,39 @@ pub async fn start(
         .and(with_context)
         .and(devices)
         .and_then(
+            /*
+              ensure that there is a cookie header and that the cookie contains a key=value pair
+                containing this ship's patp
+
+               e.g. - ensure cooke exists where:
+                   urbauth-<ship patp here>=<auth token here>
+
+                 here is a sample cookie string that passes:
+                   "urbauth-~ralbes-mislec-lodlev-migdev=0v6.bb0bl.hiu64.et7nk.qljtl.hdurg; Path=/; Max-Age=604800"
+            */
             |headers: HeaderMap, context: CallContext, devices: Devices| async move {
-                let cookie_key = format!("urbauth-~{:?}", context.ship.lock().await.ship_name);
                 if !headers.contains_key("cookie") {
                     return Err(warp::reject::custom(MissingAuthToken));
                 }
-                println!("ws: [start] token => {:?}", headers.get(cookie_key));
+                let cookie_key = format!(
+                    "urbauth-~{}",
+                    context.ship.lock().await.ship_name.as_ref().unwrap()
+                );
+                println!("ws: [start] searching cookie for token '{}'...", cookie_key);
+                let cookie_str = headers.get("cookie").unwrap().to_str().unwrap();
+                let parts = cookie_str.split(";");
+                let mut auth_token: Option<&str> = None;
+                for part in parts {
+                    let pair: Vec<&str> = part.split("=").collect();
+                    if pair[0] == cookie_key {
+                        auth_token.replace(pair[1]);
+                        break;
+                    }
+                }
+                if auth_token.is_none() {
+                    return Err(warp::reject::custom(MissingAuthToken));
+                }
+                println!("ws: [start] token => {}", auth_token.unwrap());
                 Ok((context, devices))
             },
         )
@@ -272,7 +299,7 @@ mod tests {
         println!("ws: [test][can_ws_connect] connecting to node websocket...");
         let mut request = "ws://127.0.0.1:3030/ws".into_client_request().unwrap();
         let headers = request.headers_mut();
-        headers.insert("cookie", "urbauth-~ralbes-mislec-lodlev-migdev=0v4.tott3.pnoms.o4bb5.tjo4n.1ve3m; Path=/; Max-Age=604800".parse().unwrap());
+        headers.insert("cookie", "urbauth-~ralbes-mislec-lodlev-migdev=0v6.s58oo.vp1c4.e4fg8.peu65.mols9; Path=/; Max-Age=604800".parse().unwrap());
         let (mut socket, _response) = connect(request).unwrap(); // .expect("Can't connect");
         loop {
             println!("ws: [test][can_ws_connect] waiting for ship events...");
