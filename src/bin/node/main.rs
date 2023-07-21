@@ -49,8 +49,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let http_server_url = format!("http://localhost:{}", opt.urbit_port.clone());
 
-    // set static ship_interface
-    let ship: Ship = Ship::new(http_server_url.as_str(), access_code.trim())
+    let mut ship: Ship = Ship::new(http_server_url.as_str(), access_code.trim())
         .await
         .expect("Could not create ship interface");
 
@@ -68,7 +67,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // create a call context that is used as a sort of global state for shared instances
     let context: CallContext = NodeContext::to_call_context(NodeContext {
         db: Db { pool: db_pool },
-        ship: ship,
+        ship: Arc::new(Mutex::new(ship)),
         // used to send data from the EventSource (task/thread/loop) to the receiver
         sender: sender,
         // threaded listener that waits for messages dispatched by the sender thread
@@ -92,7 +91,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // setup the websocket 'hub' which listens for new packets from ctx.receiver
     //  and transmits the events to all client subscribers to the socket
-    let ws_route = urbit_api::ws::start(context.clone());
+    let ws_route = urbit_api::ws::start(context.clone()).await;
 
     // subscribe to the ship and listen for events/updates
     // note: clones of Arc are not "expensive", since they only increase the
@@ -348,6 +347,8 @@ fn check_cookie(ctx: CallContext) -> impl Filter<Extract = (), Error = warp::Rej
                 let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();
                 let res = context
                     .ship
+                    .lock()
+                    .await
                     .scry(
                         "holon",
                         format!("/valid-cookie/{}", cookie).as_str(),

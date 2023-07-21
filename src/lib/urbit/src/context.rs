@@ -23,7 +23,7 @@ pub struct NodeContext {
     //  state (e.g. update session_auth data in Ship instance). Arc::Mutex allows
     //  mutable references which is necessary for modifying internal Ship instance state.
     //
-    pub ship: Ship,
+    pub ship: Arc<Mutex<Ship>>,
 
     //
     //  the unbounded sender/receiver pair defined here are to facilitate the flow

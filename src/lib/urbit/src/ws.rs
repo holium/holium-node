@@ -1,6 +1,6 @@
 // #![deny(warnings)]
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
-// use lazy_static::lazy_static;
+use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
@@ -39,7 +39,12 @@ pub struct ShipAction {
     pub json: JsonValue,
 }
 
-pub fn start(
+#[derive(Debug)]
+struct MissingAuthToken;
+
+impl warp::reject::Reject for MissingAuthToken {}
+
+pub async fn start(
     context: CallContext,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     // Turn our "state" into a new Filter...
@@ -50,14 +55,26 @@ pub fn start(
 
     // GET /chat -> websocket upgrade
     let handler = warp::path!("ws")
-        // The `ws()` filter will prepare Websocket handshake...
-        .and(warp::ws())
+        .and(warp::header::headers_cloned())
         .and(with_context)
         .and(devices)
-        .map(|ws: warp::ws::Ws, context: CallContext, devices| {
-            // This will call our function if the handshake succeeds.
-            ws.on_upgrade(move |socket| device_connected(socket, devices, context.clone()))
-        });
+        .and_then(
+            |headers: HeaderMap, context: CallContext, devices: Devices| async move {
+                let cookie_key = format!("urbauth-~{:?}", context.ship.lock().await.ship_name);
+                if !headers.contains_key("cookie") {
+                    return Err(warp::reject::custom(MissingAuthToken));
+                }
+                println!("ws: [start] token => {:?}", headers.get(cookie_key));
+                Ok((context, devices))
+            },
+        )
+        .and(warp::ws())
+        .map(
+            |(context, devices): (CallContext, Devices), ws: warp::ws::Ws| {
+                // This will call our function if the handshake succeeds.
+                ws.on_upgrade(move |socket| device_connected(socket, devices, context.clone()))
+            },
+        );
 
     handler
 }
@@ -177,7 +194,7 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
     // is this the packet an action payload? if so, post to ship.
     let actions: serde_json::Result<Vec<ShipAction>> = serde_json::from_str(msg);
     if actions.is_ok() {
-        let result = context.ship.post(&packet).await;
+        let result = context.ship.lock().await.post(&packet).await;
 
         if result.is_err() {
             println!("ws: [device_message] proxy.post call failed. {:?}", result);
@@ -247,14 +264,16 @@ async fn on_device_disconnected(my_id: usize, devices: &Devices) {
 
 #[cfg(test)]
 mod tests {
-    use tungstenite::connect;
-    use url::Url;
+    use tungstenite::{client::IntoClientRequest, connect};
+    // use url::Url;
     #[test]
     // connect to this node's websocket server (for receiving events from a ship)
     fn can_ws_connect() {
         println!("ws: [test][can_ws_connect] connecting to node websocket...");
-        let (mut socket, _response) =
-            connect(Url::parse("ws://127.0.0.1:3030/ws").unwrap()).expect("Can't connect");
+        let mut request = "ws://127.0.0.1:3030/ws".into_client_request().unwrap();
+        let headers = request.headers_mut();
+        headers.insert("cookie", "urbauth-~ralbes-mislec-lodlev-migdev=0v4.tott3.pnoms.o4bb5.tjo4n.1ve3m; Path=/; Max-Age=604800".parse().unwrap());
+        let (mut socket, _response) = connect(request).unwrap(); // .expect("Can't connect");
         loop {
             println!("ws: [test][can_ws_connect] waiting for ship events...");
             let msg = socket.read_message().expect("Error reading message");

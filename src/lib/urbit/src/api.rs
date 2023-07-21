@@ -1,8 +1,6 @@
 use anyhow::{bail, Result};
 use serde_json::{json, Value as JsonValue};
-use std::sync::Arc;
 use std::time::SystemTime;
-use tokio::sync::RwLock;
 
 use reqwest::header::{HeaderValue, COOKIE};
 use reqwest::Url;
@@ -16,26 +14,27 @@ pub struct Ship {
     /// The URL of the ship given as `http://ip:port` such as
     /// `http://0.0.0.0:8080`.
     pub url: String,
-    pub channel_url: Arc<RwLock<Option<String>>>,
     // ship code
     ship_code: String,
+    // channel url is generated with the open_channel function is called
+    pub channel_url: Option<String>,
     /// The session auth string header value
-    pub session_auth: Arc<RwLock<Option<String>>>,
+    pub session_auth: Option<String>,
     /// The ship name (without a leading ~)
-    pub ship_name: Arc<RwLock<Option<String>>>,
+    pub ship_name: Option<String>,
     /// The Reqwest `Client` to be reused for making requests
     req_client: Client,
 }
 
 impl Ship {
     pub async fn new(url: &str, ship_code: &str) -> Result<Ship> {
-        let result = Ship {
+        let mut result = Ship {
             url: url.to_string(),
-            channel_url: Arc::new(RwLock::new(None)),
-            session_auth: Arc::new(RwLock::new(None)),
-            ship_name: Arc::new(RwLock::new(None)),
-            req_client: Client::new(),
             ship_code: ship_code.to_string(),
+            channel_url: None,
+            session_auth: None,
+            ship_name: None,
+            req_client: Client::new(),
         };
         match result.login().await {
             Ok(_) => Ok(result),
@@ -45,7 +44,7 @@ impl Ship {
         }
     }
 
-    pub async fn login(&self) -> Result<(String, String)> {
+    pub async fn login(&mut self) -> Result<(String, String)> {
         let login_url = format!("{}/~/login", self.url);
         let resp = self
             .req_client
@@ -87,17 +86,16 @@ impl Ship {
 
         let ship_name = &session_auth[9..end_pos];
 
-        // safely updated the instance variables with the new values
-        self.ship_name.write().await.replace(ship_name.to_string());
-        self.session_auth
-            .write()
-            .await
-            .replace(session_auth.to_string());
+        let ship_name = ship_name;
+        let session_auth = session_auth;
+
+        self.ship_name.replace(ship_name.to_string());
+        self.session_auth.replace(session_auth.to_string());
 
         Ok((ship_name.to_string(), session_auth.to_string()))
     }
 
-    pub async fn open_channel(&self) -> Result<(Url, String, String)> {
+    pub async fn open_channel(&mut self) -> Result<(Url, String, String)> {
         let mut rng = rand::thread_rng();
         // Defining the uid as UNIX time, or random if error
         let uid = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
@@ -120,11 +118,8 @@ impl Ship {
             url_structured.unwrap()
         };
 
-        let session_auth = { self.session_auth.read().await };
-        let session_auth = session_auth.as_ref().unwrap();
-
-        let ship_name = { self.ship_name.read().await };
-        let ship_name = ship_name.as_ref().unwrap();
+        let ship_name = self.ship_name.as_ref().unwrap().to_string();
+        let session_auth = self.session_auth.as_ref().unwrap().to_string();
 
         // Opening channel request json
         let body = json!([{
@@ -138,7 +133,7 @@ impl Ship {
 
         // Make the put request to create the channel.
         let resp = self
-            .send_put_request(&channel_url, session_auth, &body)
+            .send_put_request(&channel_url, session_auth.as_str(), &body)
             .await;
 
         if resp.is_err() {
@@ -154,7 +149,7 @@ impl Ship {
             );
         }
 
-        self.channel_url.write().await.replace(channel_url);
+        self.channel_url.replace(channel_url);
 
         Ok((
             url_structured,
@@ -204,15 +199,14 @@ impl Ship {
     }
 
     /// Sends a scry to the ship
-    pub async fn scry(&self, app: &str, path: &str, mark: &str) -> UrbitResult<JsonValue> {
+    pub async fn scry(&mut self, app: &str, path: &str, mark: &str) -> UrbitResult<JsonValue> {
         let scry_url = format!("{}/~/scry/{}{}.{}", self.url, app, path, mark);
-        let session_auth = { self.session_auth.read().await };
-        let session_auth = session_auth.as_ref().unwrap();
+        let session_auth = self.session_auth.as_ref().unwrap().to_string();
         let ship_response_as_json: JsonValue = 'response_json: {
             let resp = self
                 .req_client
                 .get(&scry_url)
-                .header(COOKIE, session_auth)
+                .header(COOKIE, session_auth.to_string())
                 .header("Content-Type", "application/json");
             let result = resp.send().await?;
             if result.status().as_u16() == StatusCode::FORBIDDEN {
@@ -250,19 +244,14 @@ impl Ship {
     //   originating from connected devices
     // this method will attempt to refresh the urbit auth cookie if the
     //   request fails with a 403 (forbidden).
-    pub async fn post(&self, payload: &JsonValue) -> Result<()> {
-        let session_auth = self.session_auth.read().await;
-        if session_auth.is_none() {
-            bail!("ship: [post] must call login");
-        }
-        let session_auth = session_auth.as_ref().unwrap();
-        let channel_url = { self.channel_url.read().await };
-        let channel_url = channel_url.as_ref().unwrap();
+    pub async fn post(&mut self, payload: &JsonValue) -> Result<()> {
+        let session_auth = self.session_auth.as_ref().unwrap().to_string();
+        let channel_url = self.channel_url.as_ref().unwrap().to_string();
         let post_result: () = 'result: {
             let res = self
                 .req_client
-                .post(channel_url)
-                .header(COOKIE, session_auth)
+                .post(channel_url.to_string())
+                .header(COOKIE, session_auth.to_string())
                 .header("Content-Type", "application/json")
                 .json(&payload)
                 .send()
@@ -276,8 +265,8 @@ impl Ship {
                 }
                 let res = self
                     .req_client
-                    .post(channel_url)
-                    .header(COOKIE, session_auth)
+                    .post(channel_url.to_string())
+                    .header(COOKIE, session_auth.to_string())
                     .header("Content-Type", "application/json")
                     .json(&payload)
                     .send()

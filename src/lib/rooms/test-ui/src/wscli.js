@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useObserver } from 'mobx-react-lite';
 
 const ws = 'ws://';
@@ -22,6 +22,8 @@ export default function WebSocketClient() {
   const connect = (wsUrl) => {
     //`${ws}${nodeUrl}/hol/ws`
     try {
+      document.cookie =
+        'urbauth-~ralbes-mislec-lodlev-migdev=0v7.pmchc.of0sj.lhqur.nbrig.pkf9q; Path=/; Max-Age=604800';
       socketRef.current = new WebSocket(wsUrl);
 
       socketRef.current.onopen = function open() {

@@ -43,6 +43,8 @@ pub async fn import_data(ctx: &CallContext) -> Result<()> {
     // scry the ship for chat messages
     let response = ctx
         .ship
+        .lock()
+        .await
         .scry(
             "chat-db",
             format!("/db/messages/start-ms/{}", last_timestamp?).as_str(),
