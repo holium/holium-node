@@ -291,21 +291,19 @@ async fn on_device_disconnected(my_id: usize, devices: &Devices) {
 
 #[cfg(test)]
 mod tests {
-    use futures_util::stream::SplitSink;
     use futures_util::{SinkExt, StreamExt};
-    use rand::rngs::StdRng;
     use rand::Rng;
     use serde_json::json;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
     use tokio::time::{sleep, Duration};
-    use tokio_tungstenite::WebSocketStream;
-    // use tokio_tungstenite::tungstenite::WebSocket;
     use tokio_tungstenite::{
         connect_async,
         tungstenite::{client::IntoClientRequest, connect, Message},
     };
     static NEXT_MSG_ID: AtomicUsize = AtomicUsize::new(0);
-    // use url::Url;
+    static SENT_COUNT: AtomicUsize = AtomicUsize::new(0);
+    static RECD_COUNT: AtomicUsize = AtomicUsize::new(0);
     #[test]
     // connect to this node's websocket server (for receiving events from a ship)
     fn can_ws_connect() {
@@ -322,96 +320,96 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn exercise_ws_multi_connect() {
-        const NUM_WS_CONNECTIONS: i32 = 8;
-        // start NUM_WS_CONNECTIONS WebSocket clients and put each connection in a loop
-        //   that sends a message at random intervals
+    async fn test_ws_multi_connect() {
+        const NUM_WS_CONNECTIONS: usize = 8;
+        let (tx, mut rx): (UnboundedSender<String>, UnboundedReceiver<String>) =
+            unbounded_channel();
+
+        println!("starting writer...");
+        // tokio::task::spawn(async move {
         for i in 0..NUM_WS_CONNECTIONS {
-            // let _ = tokio::task::spawn(async move {
             let mut rng: rand::rngs::StdRng = rand::SeedableRng::from_entropy();
-            start(i, &mut rng).await;
-            // })
-            // .await;
+
+            let mut request = "ws://127.0.0.1:3030/ws".into_client_request().unwrap();
+            let headers = request.headers_mut();
+            headers.insert("cookie", "urbauth-~ralbes-mislec-lodlev-migdev=0v6.s58oo.vp1c4.e4fg8.peu65.mols9; Path=/; Max-Age=604800".parse().unwrap());
+
+            let (socket, _) = connect_async(request).await.unwrap();
+
+            let (mut itx, mut irx) = socket.split();
+            let tx1 = tx.clone();
+            let tx2 = tx.clone();
+
+            tokio::task::spawn(async move {
+                println!("[thread-{}] - write started", i);
+                // loop {
+                let secs = rng.gen_range(0..10);
+                sleep(Duration::from_secs(secs)).await;
+                let msg_id = NEXT_MSG_ID.fetch_add(1, Ordering::Relaxed);
+                let msg = json!([{
+                  "id": msg_id,
+                  "ship":"ralbes-mislec-lodlev-migdev",
+                  "action":"poke",
+                  "app": "helm",
+                  "mark": "helm-hi",
+                  "json": format!("test message {}", msg_id)
+                }]);
+                println!("[thread-{}]: sending message...", i); // [thread-{}]: {}", i, msg.to_string());
+                let _ = itx.send(Message::text(msg.to_string())).await;
+                SENT_COUNT.fetch_add(1, Ordering::Relaxed);
+                let _ = tx1.send("".to_string());
+                // }
+            });
+            tokio::task::spawn(async move {
+                println!("[thread-{}] - read started", i);
+                loop {
+                    let msg = irx.next().await;
+                    if msg.is_none() {
+                        println!("[thread-{}]: received message [no data]", i);
+                    } else {
+                        let msg = msg.unwrap();
+
+                        if msg.is_err() {
+                            println!("[thread-{}]: received message [error]", i);
+                        }
+
+                        let msg = msg.unwrap();
+
+                        println!("[thread-{}]: received message {}", i, msg);
+                        let msg = msg.to_string();
+
+                        let res = serde_json::from_str::<Vec<super::ShipAction>>(&msg);
+
+                        if res.is_err() {
+                            println!(
+                                "[thread-{}]: received message [error deserializing message]",
+                                i
+                            );
+                        }
+
+                        let actions = res.unwrap();
+
+                        for i in 0..actions.len() {
+                            println!("[thread-{}]: received actions - {}", i, actions[i].json);
+                        }
+
+                        RECD_COUNT.fetch_add(1, Ordering::Relaxed);
+                        let _ = tx2.send("".to_string());
+                    }
+                }
+            });
         }
 
-        loop {}
-    }
-
-    async fn start_writer(
-        i: i32,
-        rng: &mut StdRng,
-        ws: &mut SplitSink<
-            WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
-            tokio_tungstenite::tungstenite::Message,
-        >,
-    ) {
-        println!("ws: [test][exercise_ws_multi_connect][thread-{}] start writer received. start sending messages...", i);
-        // let mut rng = rand::thread_rng();
+        println!("waiting for eof...");
         loop {
-            let secs = rng.gen_range(0..10);
-            sleep(Duration::from_secs(secs)).await;
-
-            let msg_id = NEXT_MSG_ID.fetch_add(1, Ordering::Relaxed);
-            let msg = json!([{
-              "id": msg_id,
-              "ship":"ralbes-mislec-lodlev-migdev",
-              "action":"poke",
-              "app": "helm",
-              "mark": "helm-hi",
-              "json": "test message"
-            }]);
-
-            println!(
-                "ws: [test][exercise_ws_multi_connect][thread-{}] sending message...",
-                i
-            );
-
-            let _ = ws.send(Message::text(msg.to_string()));
-        }
-    }
-
-    async fn start(i: i32, rng: &mut StdRng) {
-        // establish a connection to the web socket server somewhere
-        //   between 0 and 10 seconds...
-        let mut request = "ws://127.0.0.1:3030/ws".into_client_request().unwrap();
-        let headers = request.headers_mut();
-        headers.insert("cookie", "urbauth-~ralbes-mislec-lodlev-migdev=0v6.s58oo.vp1c4.e4fg8.peu65.mols9; Path=/; Max-Age=604800".parse().unwrap());
-        let secs = rng.gen_range(0..10);
-        sleep(Duration::from_secs(secs)).await;
-
-        println!(
-            "ws: [test][exercise_ws_multi_connect][thread-{}] connecting to node websocket...",
-            i
-        );
-        let (socket, _) = connect_async(request).await.unwrap();
-
-        println!(
-            "ws: [test][exercise_ws_multi_connect][thread-{}] connected. splitting stream...",
-            i
-        );
-        let (mut tx, mut rx) = socket.split();
-
-        println!(
-            "ws: [test][exercise_ws_multi_connect][thread-{}] starting writer...",
-            i
-        );
-        let mut trng = rng.clone();
-        let _ = tokio::task::spawn(async move {
-            // once connection is established, start sending messages and random intervals
-            start_writer(i, &mut trng, &mut tx).await;
-        });
-
-        tokio::task::spawn(async move {
-            println!(
-                "ws: [test][exercise_ws_multi_connect][thread-{}] starting reader...",
-                i
-            );
-            // // start an endless websocket client read loop
-            loop {
-                let msg = rx.next().await;
-                println!("received: {:?}", msg);
+            let msg = rx.recv().await;
+            let sent_count = SENT_COUNT.fetch_add(0, Ordering::Relaxed);
+            let recd_count = RECD_COUNT.fetch_add(0, Ordering::Relaxed);
+            println!("waiting for eof [{}, {}]...", sent_count, recd_count);
+            if sent_count == NUM_WS_CONNECTIONS && recd_count == NUM_WS_CONNECTIONS * 2 {
+                println!("eot {:?}", msg);
+                break;
             }
-        });
-        // .await;
+        }
     }
 }
