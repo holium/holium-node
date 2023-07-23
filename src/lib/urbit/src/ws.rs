@@ -192,13 +192,6 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
 
     println!("ws: [device_message] [{}, {}]", my_id, msg);
 
-    // let data: serde_json::Result<Vec<ShipAction>> = serde_json::from_str(msg);
-    // let data: serde_json::Result<Vec<ShipAction>> = serde_json::from_str(msg);
-    // if data.is_err() {
-    //     println!("ws: [device_message] payload not valid json");
-    //     return;
-    // }
-
     let packet: serde_json::Result<JsonValue> = serde_json::from_str(msg);
 
     if packet.is_err() {
@@ -242,31 +235,19 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
         let _ = tx.send(Message::text(msg.clone()));
     }
 
-    // deserialize string into json array (Vec) of Poke structures
-    // let packets: Vec<ShipAction> = data.unwrap();
-    // for packet in packets {
-    //     let record = serde_json::to_value(packet);
-    //     if record.is_err() {
-    //         println!("ws: [device_message] unexpected result for serde_json::to_value call");
-    //         continue;
-    //     }
-    //     let result = crate::db::save_packet(record.unwrap());
-    //     if result.is_err() {
-    //         println!("ws: [device_message] db::save_packet call failed");
-    //         continue;
+    ////////////////////////////////////////////////////////
+    // disable broadcast for now
+    // New message from this user, send it to everyone else (except same uid)...
+    // for (&uid, tx) in devices.read().await.iter() {
+    //     if my_id == uid {
+    //         if let Err(_disconnected) = tx.send(Message::text(msg.clone())) {
+    //             // The tx is disconnected, our `user_disconnected` code
+    //             // should be happening in another task, nothing more to
+    //             // do here.
+    //         }
     //     }
     // }
-
-    // New message from this user, send it to everyone else (except same uid)...
-    for (&uid, tx) in devices.read().await.iter() {
-        if my_id == uid {
-            if let Err(_disconnected) = tx.send(Message::text(msg.clone())) {
-                // The tx is disconnected, our `user_disconnected` code
-                // should be happening in another task, nothing more to
-                // do here.
-            }
-        }
-    }
+    ///////////////////////////////////////////////////////
 }
 
 async fn on_ship_message(my_id: usize, msg: JsonValue, devices: &Devices) {
@@ -319,6 +300,11 @@ mod tests {
         }
     }
 
+    ///
+    /// test_ws_multi_connect - open NUM_WS_CONNECTIONS websocket client connections
+    ///   and succeed only if 8 unique sends are transmitted and 8 unique receives are
+    ///   read.
+    ///
     #[tokio::test]
     async fn test_ws_multi_connect() {
         const NUM_WS_CONNECTIONS: usize = 8;
@@ -406,7 +392,7 @@ mod tests {
             let sent_count = SENT_COUNT.fetch_add(0, Ordering::Relaxed);
             let recd_count = RECD_COUNT.fetch_add(0, Ordering::Relaxed);
             println!("waiting for eof [{}, {}]...", sent_count, recd_count);
-            if sent_count == NUM_WS_CONNECTIONS && recd_count == NUM_WS_CONNECTIONS * 2 {
+            if sent_count == NUM_WS_CONNECTIONS && recd_count == NUM_WS_CONNECTIONS {
                 println!("eot {:?}", msg);
                 break;
             }
