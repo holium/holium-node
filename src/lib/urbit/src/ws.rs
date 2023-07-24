@@ -77,6 +77,7 @@ pub async fn start(
                     "urbauth-~{}",
                     context.ship.lock().await.ship_name.as_ref().unwrap()
                 );
+                #[cfg(feature = "trace")]
                 println!("ws: [start] searching cookie for token '{}'...", cookie_key);
                 let cookie_str = headers.get("cookie").unwrap().to_str().unwrap();
                 let parts = cookie_str.split(";");
@@ -91,6 +92,7 @@ pub async fn start(
                 if auth_token.is_none() {
                     return Err(warp::reject::custom(MissingAuthToken));
                 }
+                #[cfg(feature = "trace")]
                 println!("ws: [start] token => {}", auth_token.unwrap());
                 Ok((context, devices))
             },
@@ -190,6 +192,7 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, _d
         return;
     };
 
+    #[cfg(feature = "trace")]
     println!("ws: [device_message] [{}, {}]", my_id, msg);
 
     let packet: serde_json::Result<JsonValue> = serde_json::from_str(msg);

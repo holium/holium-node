@@ -10,33 +10,19 @@
 use crate::context::CallContext;
 use anyhow::{bail, Result};
 
-use eventsource_threaded::EventSource;
-
-use reqwest::header::{HeaderMap, HeaderValue, COOKIE};
-
 pub async fn start(ctx: CallContext) -> Result<()> {
-    let result = ctx.ship.lock().await.open_channel().await;
+    let receiver = ctx.ship.lock().await.open_channel().await;
 
-    if result.is_err() {
+    if receiver.is_err() {
         bail!("sub: [start] open_channel call failed");
     }
 
-    let result = result.unwrap();
-    let channel_url = result.0;
-    let _ship_name = result.1;
-    let session_auth = result.2;
-
-    // Create cookie header with the ship session auth val
-    let mut headers = HeaderMap::new();
-    headers.append(COOKIE, HeaderValue::from_str(&session_auth)?);
+    let receiver = receiver.unwrap();
 
     tokio::spawn(async move {
-        let receiver = EventSource::new(channel_url.clone(), headers);
         loop {
-            println!(
-                "ship: [listen] '{}' waiting for ship event...",
-                channel_url.to_string()
-            );
+            println!("ship: [listen] waiting for ship event...",);
+
             let msg = receiver.recv();
 
             if msg.is_err() {
@@ -54,6 +40,7 @@ pub async fn start(ctx: CallContext) -> Result<()> {
             // the deserialized Event from SSE
             let event = msg.unwrap();
 
+            #[cfg(feature = "trace")]
             println!("ship: [listen] received event => {}", event);
 
             let data = serde_json::from_str(&event.data);
@@ -68,6 +55,7 @@ pub async fn start(ctx: CallContext) -> Result<()> {
             // log the entire packet to the database
             let _ = ctx.db.save_packet("ship", &data);
 
+            #[cfg(feature = "trace")]
             println!("ship: [listen] sending event to receiver => {}", data);
 
             let send_result = ctx.sender.send(data);

@@ -49,15 +49,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let http_server_url = format!("http://localhost:{}", opt.urbit_port.clone());
 
-    let mut ship: Ship = Ship::new(http_server_url.as_str(), access_code.trim())
-        .await
-        .expect("Could not create ship interface");
+    let mut ship = Ship::new(http_server_url.as_str(), access_code.trim()).await?;
 
-    let scry_res = ship.scry("docket", "/our", "json").await;
-    match scry_res {
-        Ok(_) => println!("test_scry: {}", scry_res.unwrap().to_string()),
-        Err(e) => println!("scry failed: {}", e),
-    }
+    let _ = ship.scry("docket", "/our", "json").await?;
 
     // create a new database file (bedrock.sqlite) in the ./src/lib/db/data folder
     let db_pool = bedrock_db::initialize_pool("bedrock")?;
@@ -244,7 +238,7 @@ struct ErrorMessage {
 }
 
 async fn handle_unauthorized(reject: Rejection) -> Result<impl Reply, Rejection> {
-    if cfg!(feature = "debug_log") {
+    if cfg!(feature = "trace") {
         println!("handle_unauthorized: {:?}", reject);
     }
 
@@ -261,7 +255,7 @@ async fn handle_unauthorized(reject: Rejection) -> Result<impl Reply, Rejection>
 }
 
 async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
-    if cfg!(feature = "debug_log") {
+    if cfg!(feature = "trace") {
         println!("handle_rejection: {:?}", err);
     }
 
@@ -316,12 +310,12 @@ fn handle_response(path: &str, data: JsonValue) -> Result<(), warp::Rejection> {
         .as_bool()
         .unwrap();
     if is_valid {
-        if cfg!(feature = "debug_log") {
+        if cfg!(feature = "trace") {
             println!("cookie valid {}", path)
         }
         return Ok(());
     } else {
-        if cfg!(feature = "debug_log") {
+        if cfg!(feature = "trace") {
             println!("cookie invalid {}", path)
         }
         return Err(reject_on_path(path));
@@ -341,7 +335,7 @@ fn check_cookie(ctx: CallContext) -> impl Filter<Extract = (), Error = warp::Rej
                     return Err(reject_on_path(path.as_str()));
                 }
                 let cookie = headers.get("Cookie").unwrap().to_str().unwrap();
-                if cfg!(feature = "debug_log") {
+                if cfg!(feature = "trace") {
                     println!("path: {}, cookie: {}", path.as_str(), cookie);
                 }
                 let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();

@@ -52,7 +52,7 @@ pub async fn import_data(ctx: &CallContext) -> Result<()> {
         )
         .await?;
 
-    println!("deserializing chat messages retrieved from ship...");
+    // println!("deserializing chat messages retrieved from ship...");
 
     let root: ChatTables = serde_json::from_value(response)?;
 
@@ -65,7 +65,7 @@ pub async fn import_data(ctx: &CallContext) -> Result<()> {
     }
 
     for msg in root.tables.messages {
-        println!("processing chat message: {:?}", msg);
+        // println!("processing chat message: {:?}", msg);
         let mut stmt = conn.prepare(
             "REPLACE INTO chat_messages (
                     path,

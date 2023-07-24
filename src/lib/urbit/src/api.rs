@@ -2,12 +2,17 @@ use anyhow::{bail, Result};
 use serde_json::{json, Value as JsonValue};
 use std::time::SystemTime;
 
-use reqwest::header::{HeaderValue, COOKIE};
+use reqwest::header::{HeaderMap, HeaderValue, COOKIE};
 use reqwest::Url;
 use reqwest::{Client, Response, StatusCode};
 
+use eventsource_threaded::{EventSource, ReceiverSource};
+
 use crate::error::{Result as UrbitResult, UrbitAPIError};
 use rand::Rng;
+
+pub static SUBSCRIPTION_MSG_ID: u64 = u64::MAX - 1;
+// static NEXT_MESSAGE_ID: AtomicU64 = AtomicU64::new(u64::MAX - 1000);
 
 #[derive(Debug, Clone)]
 pub struct Ship {
@@ -95,7 +100,13 @@ impl Ship {
         Ok((ship_name.to_string(), session_auth.to_string()))
     }
 
-    pub async fn open_channel(&mut self) -> Result<(Url, String, String)> {
+    // 1) poke the ship to open the channel @ url
+    // 2) connect the event source to the channel url
+    // 3) read in the first event from the EventSource and
+    //    validate that it matches the sub's message id and
+    //    with a payload containing response='poke' and ok='ok' fields
+    // then, and only then, do you return success from this method
+    pub async fn open_channel(&mut self) -> Result<ReceiverSource> {
         let mut rng = rand::thread_rng();
         // Defining the uid as UNIX time, or random if error
         let uid = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
@@ -123,7 +134,7 @@ impl Ship {
 
         // Opening channel request json
         let body = json!([{
-                "id": 1,
+                "id": SUBSCRIPTION_MSG_ID,
                 "action": "poke",
                 "ship": ship_name,
                 "app": "hood",
@@ -149,13 +160,110 @@ impl Ship {
             );
         }
 
+        // Create cookie header with the ship session auth val
+        let mut headers = HeaderMap::new();
+        headers.append(COOKIE, HeaderValue::from_str(&session_auth)?);
+
+        // now open the EventSource and retrieve/ack the poke event from above.
+        //  only after ALL of this succeeds should we return the receiver and start polling
+        let receiver = EventSource::new(url_structured, headers);
+        println!("api: [open_channel] waiting for open channel confirmation event...");
+
+        let msg = receiver.recv();
+
+        if msg.is_err() {
+            bail!("api: [open_channel] event receive error. msg => {:?}", msg);
+        }
+
+        let msg = msg.unwrap();
+
+        if msg.is_err() {
+            bail!("api: [open_channel] event receive error. msg =>{:?}", msg);
+        }
+
+        // the deserialized Event from SSE
+        let event = msg.unwrap();
+
+        #[cfg(feature = "trace")]
+        println!("api: [open_channel] received event => {}", event);
+
+        let data = serde_json::from_str::<JsonValue>(&event.data);
+
+        if data.is_err() {
+            bail!(
+                "api: [open_channel] error deserializing confirmation event => {:?}",
+                event.data
+            );
+        }
+
+        let data = data.unwrap();
+
+        if !data.is_object() {
+            bail!(
+                "api: [open_channel] invalid event stream message. must be json object {}",
+                event.data
+            );
+        }
+
+        let id = {
+            let id = data.get("id");
+            if id.is_none() {
+                bail!(
+                    "api: [open_channel] invalid event stream message. must be json object {}",
+                    event.data
+                )
+            }
+            let id = id.unwrap().as_u64();
+            if id.is_none() {
+                bail!(
+                    "api: [open_channel] SSE event id not a valid number {}",
+                    event.data
+                )
+            }
+            id.unwrap()
+        };
+
+        let ok = {
+            let ok = data.get("ok");
+            if ok.is_none() {
+                bail!(
+                    "api: [open_channel] unexpected SSE event. missing ok field. {}",
+                    event.data
+                )
+            }
+            ok.unwrap()
+        };
+
+        let response = {
+            let response = data.get("response");
+            if response.is_none() {
+                bail!(
+                    "api: [open_channel] unexpected SSE event. missing response field. {}",
+                    event.data
+                )
+            }
+            response.unwrap()
+        };
+
+        if !(data.is_object()
+            && id == super::api::SUBSCRIPTION_MSG_ID
+            && ok == "ok"
+            && response == "poke")
+        {
+            bail!(
+                "api: [open_channel] failed to valid SSE handshake {}",
+                event.data
+            )
+        }
+
         self.channel_url.replace(channel_url);
 
-        Ok((
-            url_structured,
-            ship_name.to_string(),
-            session_auth.to_string(),
-        ))
+        Ok(receiver)
+        // Ok((
+        //     url_structured,
+        //     ship_name.to_string(),
+        //     session_auth.to_string(),
+        // ))
     }
 
     // Send a put request using the `ShipInterface`
@@ -168,10 +276,12 @@ impl Ship {
         // let json = body.to_string();
         let json = serde_json::to_string(body)?;
 
+        #[cfg(feature = "trace")]
         println!(
             "ship: [start_listener] opening channel [{}, {}, {}]...",
             url, session_auth, json
         );
+        println!("ship: [start_listener] opening channel @ {}...", url);
 
         let req = self
             .req_client
@@ -254,7 +364,7 @@ impl Ship {
             );
             let res = self
                 .req_client
-                .put(channel_url.to_string())
+                .post(channel_url.to_string())
                 .header(COOKIE, session_auth.to_string())
                 .header("Content-Type", "application/json")
                 .json(&payload)
@@ -273,7 +383,7 @@ impl Ship {
                 }
                 let res = self
                     .req_client
-                    .put(channel_url.to_string())
+                    .post(channel_url.to_string())
                     .header(COOKIE, session_auth.to_string())
                     .header("Content-Type", "application/json")
                     .json(&payload)
@@ -290,6 +400,7 @@ impl Ship {
                     res.status().as_u16()
                 )
             }
+            #[cfg(feature = "trace")]
             println!("ship: [post] success {}", payload.to_string());
             ()
         };

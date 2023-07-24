@@ -6,6 +6,14 @@ import WebSocketClient from './wscli';
 import registerServiceWorker from './registerServiceWorker';
 
 let nextMessageId = 1;
+try {
+  let entry = window.localStorage.getItem('nextMessageId');
+  if (entry) {
+    nextMessageId = parseInt(entry);
+  }
+} catch (e) {
+  console.error(e);
+}
 
 // subscriptions
 // let subs = {};
@@ -129,10 +137,7 @@ window.connectWs = (url) => {
     switch (action.action) {
       case 'poke':
       case 'unsubscribe':
-        break;
-
       case 'subscribe':
-        // subs[action.id] = null;
         break;
     }
   };
