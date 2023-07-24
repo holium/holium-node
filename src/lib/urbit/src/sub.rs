@@ -31,9 +31,12 @@ pub async fn start(ctx: CallContext) -> Result<()> {
     headers.append(COOKIE, HeaderValue::from_str(&session_auth)?);
 
     tokio::spawn(async move {
-        let receiver = EventSource::new(channel_url, headers);
+        let receiver = EventSource::new(channel_url.clone(), headers);
         loop {
-            println!("ship: [listen] waiting for ship event...");
+            println!(
+                "ship: [listen] '{}' waiting for ship event...",
+                channel_url.to_string()
+            );
             let msg = receiver.recv();
 
             if msg.is_err() {

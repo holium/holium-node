@@ -248,9 +248,13 @@ impl Ship {
         let session_auth = self.session_auth.as_ref().unwrap().to_string();
         let channel_url = self.channel_url.as_ref().unwrap().to_string();
         let post_result: () = 'result: {
+            println!(
+                "ship: [post] posting message to '{}'...",
+                self.channel_url.as_ref().unwrap().to_string()
+            );
             let res = self
                 .req_client
-                .post(channel_url.to_string())
+                .put(channel_url.to_string())
                 .header(COOKIE, session_auth.to_string())
                 .header("Content-Type", "application/json")
                 .json(&payload)
@@ -259,13 +263,17 @@ impl Ship {
             // if it's a 403, this indicates the auth header is invalid or expired
             //  try to fetch another token and retry
             if res.status() == StatusCode::FORBIDDEN {
+                println!(
+                    "ship: [post] 403. retrying. posting message to '{}'...",
+                    self.channel_url.as_ref().unwrap().to_string()
+                );
                 let result = self.login().await;
                 if result.is_err() {
                     bail!("ship: [post] login failed")
                 }
                 let res = self
                     .req_client
-                    .post(channel_url.to_string())
+                    .put(channel_url.to_string())
                     .header(COOKIE, session_auth.to_string())
                     .header("Content-Type", "application/json")
                     .json(&payload)
@@ -282,6 +290,7 @@ impl Ship {
                     res.status().as_u16()
                 )
             }
+            println!("ship: [post] success {}", payload.to_string());
             ()
         };
         Ok(post_result)

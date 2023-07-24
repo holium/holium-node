@@ -182,7 +182,7 @@ async fn device_connected(
 }
 
 ///
-async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, devices: &Devices) {
+async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, _devices: &Devices) {
     // Skip any non-Text messages...
     let msg = if let Ok(s) = msg.to_str() {
         s
@@ -212,28 +212,40 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
     // 2) post action payload to ship. event source receiver will relay any updates/effects
     //     back to connected devices
     // is this the packet an action payload? if so, post to ship.
-    let actions: serde_json::Result<Vec<ShipAction>> = serde_json::from_str(msg);
-    if actions.is_ok() {
-        let result = context.ship.lock().await.post(&packet).await;
+    // let actions: serde_json::Result<Vec<ShipAction>> = serde_json::from_str(msg);
 
-        if result.is_err() {
-            println!("ws: [device_message] proxy.post call failed. {:?}", result);
-            return;
-        }
+    // if actions.is_err() {
+    //     println!(
+    //         "ws: [device_message] error deserializing message to action array: {}",
+    //         msg
+    //     );
+    //     return;
+    // }
+
+    println!("ws: [device_message] relaying actions payload to ship...");
+
+    let result = context.ship.lock().await.post(&packet).await;
+
+    if result.is_err() {
+        println!("ws: [device_message] proxy.post call failed. {:?}", result);
+        return;
     }
 
+    // disable sending messages back to the calling device
+    // the flow should follow:
+    //   device -[req]-> node -[req]-> ship -[resp]-> node -[resp]-> device
     // send the proxy post response back to the originating device over websocket
-    let tx = devices.read();
-    let tx = tx.await;
-    let tx = tx.get(&my_id);
-    {
-        if tx.is_none() {
-            println!("ws: [device_message] error attempting to read device {} from list of connected devices", my_id);
-            return;
-        }
-        let tx = tx.unwrap();
-        let _ = tx.send(Message::text(msg.clone()));
-    }
+    // let tx = devices.read();
+    // let tx = tx.await;
+    // let tx = tx.get(&my_id);
+    // {
+    //     if tx.is_none() {
+    //         println!("ws: [device_message] error attempting to read device {} from list of connected devices", my_id);
+    //         return;
+    //     }
+    //     let tx = tx.unwrap();
+    //     let _ = tx.send(Message::text(msg.clone()));
+    // }
 
     ////////////////////////////////////////////////////////
     // disable broadcast for now
@@ -253,8 +265,8 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
 async fn on_ship_message(my_id: usize, msg: JsonValue, devices: &Devices) {
     // New message from the ship, send it to all connected devices (except same uid)...
     for (&uid, tx) in devices.read().await.iter() {
-        if my_id != uid {
-            if let Err(_disconnected) = tx.send(Message::text(msg.as_str().unwrap())) {
+        if my_id == uid {
+            if let Err(_disconnected) = tx.send(Message::text(msg.to_string())) {
                 // The tx is disconnected, our `user_disconnected` code
                 // should be happening in another task, nothing more to
                 // do here.
@@ -304,6 +316,9 @@ mod tests {
     /// test_ws_multi_connect - open NUM_WS_CONNECTIONS websocket client connections
     ///   and succeed only if 8 unique sends are transmitted and 8 unique receives are
     ///   read.
+    ///
+    ///  prereqs: you must start the main process which will start the websocket server and
+    ///    serve out the ws routes.
     ///
     #[tokio::test]
     async fn test_ws_multi_connect() {

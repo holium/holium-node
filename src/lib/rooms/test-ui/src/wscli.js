@@ -13,7 +13,7 @@ export default function WebSocketClient() {
   const sendPayload = () => {
     try {
       let parsedPayload = unserialize(payload);
-      socketRef.current.send(serialize(parsedPayload));
+      socketRef.current.send_raw(parsedPayload);
     } catch (e) {
       console.log('invalid json', e);
     }
@@ -24,33 +24,35 @@ export default function WebSocketClient() {
     try {
       document.cookie =
         'urbauth-~ralbes-mislec-lodlev-migdev=0v7.pmchc.of0sj.lhqur.nbrig.pkf9q; Path=/; Max-Age=604800';
-      socketRef.current = new WebSocket(wsUrl);
 
-      socketRef.current.onopen = function open() {
-        setStatus('connected');
-        socketRef.current.send(serialize({ type: 'connect' }));
-      };
+      socketRef.current = window.connectWs(wsUrl);
+      // socketRef.current = new WebSocket(wsUrl);
 
-      socketRef.current.onmessage = function incoming(message) {
-        const parsedMessage = unserialize(message.data);
-        responseParser(parsedMessage);
-      };
+      // socketRef.current.onopen = function open() {
+      //   setStatus('connected');
+      //   socketRef.current.send(serialize({ type: 'connect' }));
+      // };
 
-      socketRef.current.onclose = function close() {
-        console.log('disconnected');
-        setStatus('disconnected');
-        // setTimeout(connect, 5000); // Try to reconnect after 5 seconds
-      };
+      // socketRef.current.onmessage = function incoming(message) {
+      //   const parsedMessage = unserialize(message.data);
+      //   responseParser(parsedMessage);
+      // };
 
-      socketRef.current.onerror = function error(err) {
-        console.error('Error occurred:', err);
-        setStatus('error');
-        socketRef.current.close();
-      };
-      // on sigkill close the connection
-      window.onbeforeunload = function () {
-        disconnect();
-      };
+      // socketRef.current.onclose = function close() {
+      //   console.log('disconnected');
+      //   setStatus('disconnected');
+      //   // setTimeout(connect, 5000); // Try to reconnect after 5 seconds
+      // };
+
+      // socketRef.current.onerror = function error(err) {
+      //   console.error('Error occurred:', err);
+      //   setStatus('error');
+      //   socketRef.current.close();
+      // };
+      // // on sigkill close the connection
+      // window.onbeforeunload = function () {
+      //   disconnect();
+      // };
     } catch (e) {
       console.error(e);
     }
