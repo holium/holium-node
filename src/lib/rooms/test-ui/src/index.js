@@ -6,14 +6,14 @@ import WebSocketClient from './wscli';
 import registerServiceWorker from './registerServiceWorker';
 
 let nextMessageId = 1;
-try {
-  let entry = window.localStorage.getItem('nextMessageId');
-  if (entry) {
-    nextMessageId = parseInt(entry);
-  }
-} catch (e) {
-  console.error(e);
-}
+// try {
+//   let entry = window.localStorage.getItem('nextMessageId');
+//   if (entry) {
+//     nextMessageId = parseInt(entry);
+//   }
+// } catch (e) {
+//   console.error(e);
+// }
 
 // subscriptions
 // let subs = {};
@@ -64,7 +64,7 @@ window.connectWs = (url) => {
       console.error(
         `ws: [onmessage] ${msg.id} ${msg.response} error: ${msg.err}`
       );
-      window.localStorage.set(`error-${msg.id}`, event.data);
+      // localStorage.set(`error-${msg.id}`, event.data);
       return;
     }
 

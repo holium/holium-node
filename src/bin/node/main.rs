@@ -5,13 +5,13 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 
 use serde_derive::Serialize;
-use serde_json::{json, Value as JsonValue};
+use serde_json::Value as JsonValue;
 use warp::http::uri::PathAndQuery;
 use warp::http::StatusCode;
 use warp::{http::Uri, reject, Filter, Rejection, Reply};
 
-use tokio::sync::mpsc::unbounded_channel;
-// use crossbeam::channel::unbounded;
+// use tokio::sync::mpsc::unbounded_channel;
+use crossbeam::channel::unbounded;
 // use tokio::time::{sleep, Duration};
 
 use structopt::StructOpt;
@@ -58,25 +58,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // create a new database file (bedrock.sqlite) in the ./src/lib/db/data folder
     let db_pool = bedrock_db::initialize_pool("bedrock")?;
 
-    let (sender, receiver) = unbounded_channel::<JsonValue>();
-    // let receiver = Arc::new(Mutex::new(receiver));
-
-    #[cfg(feature = "precheck")]
-    {
-        let test_receiver = Arc::clone(&receiver);
-
-        tokio::task::spawn(async move {
-            println!("testing receiver...");
-            let message = test_receiver.lock().await.recv().await;
-            println!("message received => {:?}", message);
-        });
-
-        sleep(Duration::from_secs(2)).await;
-        println!("testing sender...");
-        let _ = sender.send(json!({
-          "message": "test"
-        }));
-    }
+    let (sender, receiver) = unbounded::<JsonValue>();
 
     // create a call context that is used as a sort of global state for shared instances
     let context: CallContext = NodeContext::to_call_context(NodeContext {
@@ -87,8 +69,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         // threaded listener that waits for messages dispatched by the sender thread
         //  note: need to wrap in Arc::Mutex since will need a mutable reference from within
         //  the leveraging thread (see ws.rs)
-        receiver: Arc::new(Mutex::new(receiver)),
-        // receiver: receiver,
+        // receiver: Arc::new(Mutex::new(receiver)),
+        receiver: receiver,
     });
 
     //

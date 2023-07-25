@@ -119,7 +119,7 @@ export default function WebSocketClient() {
             Connect
           </button>
           <button
-            disabled={status === 'disconnected'}
+            // disabled={status === 'disconnected'}
             onClick={() => disconnect()}
           >
             Disconnect

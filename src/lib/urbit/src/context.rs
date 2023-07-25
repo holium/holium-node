@@ -2,12 +2,16 @@ use std::sync::Arc;
 
 use crate::api::Ship;
 use crate::db::Db;
-// use crossbeam::channel::{Receiver, Sender};
+use crossbeam::channel::{Receiver, Sender};
 use serde_json::Value as JsonValue;
-use tokio::sync::{
-    mpsc::{UnboundedReceiver, UnboundedSender},
-    Mutex,
-};
+use tokio::sync::Mutex;
+
+///
+/// NOTE: We need at least two ship event receivers:
+///   1) one to service any devices connected over websockets
+///   2) one to handle other synch'ing duties with ships outside
+///      the context of a websocket connect
+///
 
 #[derive(Debug)]
 pub struct NodeContext {
@@ -35,7 +39,7 @@ pub struct NodeContext {
     //  when new events come in from the bound ship, the data is cast (as json) and sent
     //  over this end of the channel. the ship_event_receiver (defined further down) will
     //  receive these new messages in a message loop
-    pub sender: UnboundedSender<JsonValue>,
+    pub sender: Sender<JsonValue>,
     // pub sender: Sender<JsonValue>,
     //
     //  receiver - the output end of an unbounded channel that receives
@@ -44,8 +48,8 @@ pub struct NodeContext {
     //  calling the recv() method on the UnboundedReceiver requires a mutable
     //  reference. Mutex supports acquiring a mutable reference across threads
     //
-    // pub receiver: Receiver<JsonValue>,
-    pub receiver: Arc<Mutex<UnboundedReceiver<JsonValue>>>,
+    // pub receiver: Arc<Mutex<UnboundedReceiver<JsonValue>>>,
+    pub receiver: Receiver<JsonValue>,
 }
 
 // by "wrapping" the NodeContext in an Arc, we ensure that cloning
