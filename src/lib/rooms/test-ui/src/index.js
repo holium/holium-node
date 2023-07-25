@@ -140,6 +140,7 @@ window.connectWs = (url) => {
       case 'subscribe':
         break;
     }
+    return action;
   };
 
   ws.prepare = (message) => {

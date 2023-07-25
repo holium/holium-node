@@ -15,6 +15,7 @@ bedrock-db = { path = "./src/lib/db" }
 rooms = { path = "./src/lib/rooms" }
 urbit-api = { path = "./src/lib/urbit" }
 bytes = "1.0"
+crossbeam = "0.8.2"
 event-listener-primitives = "2.0.1"
 lazy_static = "1.4.0"
 parking_lot = "0.12.1"
@@ -50,3 +51,4 @@ bench = false
 # no features by default
 default = []
 trace = []
+precheck = []

@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.71"
 bedrock-db = { path = "../../lib/db" }
+crossbeam = "0.8.2"
 eventsource-threaded = "0.1.0"
 lazy_static = "1.4.0"
 reqwest = { version = "0.11.18", features = ["blocking", "json"] }
@@ -31,3 +32,4 @@ url = "2.2.2"
 # no features by default
 default = []
 trace = []
+precheck = []

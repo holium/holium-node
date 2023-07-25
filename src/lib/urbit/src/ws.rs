@@ -8,10 +8,14 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
+
 use tokio::sync::{mpsc, RwLock};
 use tokio_stream::wrappers::UnboundedReceiverStream;
 use warp::ws::{Message, WebSocket};
 use warp::Filter;
+
+use serde_json::json;
+use tokio::sync::mpsc::UnboundedReceiver;
 
 use crate::context::CallContext;
 
@@ -51,6 +55,10 @@ pub async fn start(
     let devices = Devices::default();
     let devices = warp::any().map(move || devices.clone());
 
+    println!(
+        "ws: [start] - [tx, rx]] addresses [{:p}, {:p}]",
+        &context.sender, &context.receiver
+    );
     let with_context = warp::any().map(move || context.clone());
 
     // GET /chat -> websocket upgrade
@@ -101,6 +109,10 @@ pub async fn start(
         .map(
             |(context, devices): (CallContext, Devices), ws: warp::ws::Ws| {
                 // This will call our function if the handshake succeeds.
+                println!(
+                    "ws: [ws_upgrade] - [tx, rx]] addresses [{:p}, {:p}]",
+                    &context.sender, &context.receiver
+                );
                 ws.on_upgrade(move |socket| device_connected(socket, devices, context.clone()))
             },
         );
@@ -128,6 +140,7 @@ async fn device_connected(
 
     // spawn a task to listen for messages to send to transmit to connected devices
     tokio::task::spawn(async move {
+        println!("ws: [device_connected] waiting for outgoing messages...");
         while let Some(message) = rx.next().await {
             device_ws_tx
                 .send(message)
@@ -146,9 +159,11 @@ async fn device_connected(
 
     // now spawn a task to listen for incoming messages from connected devices
     tokio::task::spawn(async move {
+        println!("ws: [device_connected] waiting for device message...");
         // Every time the device sends a message, broadcast it to
         // all other devices...
         while let Some(result) = device_ws_rx.next().await {
+            println!("{:?}", result);
             let msg = match result {
                 Ok(msg) => msg,
                 Err(e) => {
@@ -161,20 +176,107 @@ async fn device_connected(
         }
     });
 
+    // let ship_receiver = context.ship.lock().await.open_channel().await;
+
+    // if ship_receiver.is_err() {
+    //     println!("ws: [device_connected] open_channel call failed");
+    // }
+
+    // let ship_receiver = ship_receiver.unwrap();
+    // let dev = devices.clone();
+
+    // let _ = tokio::spawn(async move {
+    //     loop {
+    //         println!("ship: [listen] waiting for ship event...",);
+
+    //         let msg = ship_receiver.recv();
+
+    //         if msg.is_err() {
+    //             println!("ship: [listen] event receive error. msg => {:?}", msg.err());
+    //             continue;
+    //         }
+
+    //         let msg = msg.unwrap();
+
+    //         if msg.is_err() {
+    //             println!("ship: [listen] event request error. msg => {:?}", msg);
+
+    //             let msg = json!({
+    //               "id": 4884,
+    //               "type": "error",
+    //               "error": "ship-stream-disconnected",
+    //             });
+
+    //             println!("ship: [listen] forwarding error to devices => {}", msg);
+
+    //             on_ship_message(my_id, msg, &dev).await;
+
+    //             continue;
+    //         }
+
+    //         // the deserialized Event from SSE
+    //         let event = msg.unwrap();
+
+    //         #[cfg(feature = "trace")]
+    //         println!("ship: [listen] received event => {}", event);
+
+    //         let data = serde_json::from_str(&event.data);
+
+    //         if data.is_err() {
+    //             println!("ship: [listen] error deserializing event source message to json");
+    //             continue;
+    //         }
+
+    //         let data = data.unwrap();
+
+    //         // log the entire packet to the database
+    //         let _ = context.db.save_packet("ship", &data);
+
+    //         #[cfg(feature = "trace")]
+    //         println!("ship: [listen] sending event to receiver => {}", data);
+
+    //         // let send_result = tx.send(Message::text(data.to_string()));
+    //         on_ship_message(my_id, data, &dev).await;
+    //     }
+    // })
+    // .await;
+
     /////////////////////
     //
     // SHIP update/event listener
     //  mpsc (multi-producer single consumer) means that there should only ever be one
     //   ship listening receiver; therefore safe to lock (i.e. no race conditions or other blocking concerns
+    // let ship_receiver = Arc::clone(&context.receiver);
     println!("ws: [device_connected] waiting for ship event...");
-    let mut receiver = context.receiver.lock().await;
-    while let Some(result) = receiver.recv().await {
-        println!(
-            "ws: [device_connected] received event from ship => [{}, {}]",
-            my_id, result
-        );
-        on_ship_message(my_id, result, &devices).await;
-    }
+    // let mut ship_receiver = context.receiver.lock().await;
+    // loop {
+    //     let result = ship_receiver.recv().await;
+    //     if result.is_none() {
+    //         break;
+    //     }
+    //     let result = result.unwrap();
+    //     println!(
+    //         "ws: [device_connected] received event from ship => [{}, {}]",
+    //         my_id, result
+    //     );
+    //     on_ship_message(my_id, result, &devices).await;
+    // }
+    let rx_devices = devices.clone();
+    let _ = tokio::task::spawn(async move {
+        let mut ws_receiver = context.receiver.lock().await;
+        println!("GOT RECIEVER");
+        {
+            while let Some(result) = ws_receiver.recv().await {
+                println!(
+                    "ws: [device_connected] received event from ship => [{}, {}]",
+                    my_id, result
+                );
+                on_ship_message(my_id, result, &rx_devices).await;
+            }
+        }
+    })
+    .await;
+
     //
     /////////////////////
 

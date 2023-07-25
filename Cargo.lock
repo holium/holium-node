@@ -840,6 +840,7 @@ version = "0.1.0"
 dependencies = [
  "bedrock-db",
  "bytes 1.4.0",
+ "crossbeam",
  "event-listener-primitives",
  "lazy_static",
  "parking_lot 0.12.1",
@@ -2302,6 +2303,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bedrock-db",
+ "crossbeam",
  "eventsource-threaded",
  "futures",
  "futures-util",

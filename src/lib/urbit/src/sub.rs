@@ -9,6 +9,7 @@
 ///
 use crate::context::CallContext;
 use anyhow::{bail, Result};
+use serde_json::json;
 
 pub async fn start(ctx: CallContext) -> Result<()> {
     let receiver = ctx.ship.lock().await.open_channel().await;
@@ -26,14 +27,29 @@ pub async fn start(ctx: CallContext) -> Result<()> {
             let msg = receiver.recv();
 
             if msg.is_err() {
-                println!("ship: [listen] event receive error. msg => {:?}", msg);
+                println!("ship: [listen] event receive error. msg => {:?}", msg.err());
                 continue;
             }
 
             let msg = msg.unwrap();
 
             if msg.is_err() {
-                println!("ship: [listen] event receive error. msg =>{:?}", msg);
+                println!("ship: [listen] event request error. msg => {:?}", msg);
+
+                let msg = json!({
+                  "id": 4884,
+                  "type": "error",
+                  "error": "ship-stream-disconnected",
+                });
+
+                println!("ship: [listen] forwarding error to devices => {}", msg);
+
+                let send_result = ctx.sender.send(msg);
+
+                if send_result.is_err() {
+                    println!("ship: [listen] error sending packet => {:?}", send_result);
+                }
+
                 continue;
             }
 
@@ -57,6 +73,11 @@ pub async fn start(ctx: CallContext) -> Result<()> {
 
             #[cfg(feature = "trace")]
             println!("ship: [listen] sending event to receiver => {}", data);
+
+            println!(
+                "ship: [start] - [tx, rx]] addresses [{:p}, {:p}]",
+                &ctx.sender, &ctx.receiver
+            );
 
             let send_result = ctx.sender.send(data);
 

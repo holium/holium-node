@@ -107,7 +107,7 @@ impl Ship {
     //    with a payload containing response='poke' and ok='ok' fields
     // then, and only then, do you return success from this method
     pub async fn open_channel(&mut self) -> Result<ReceiverSource> {
-        let mut rng = rand::thread_rng();
+        let mut rng: rand::rngs::StdRng = rand::SeedableRng::from_entropy();
         // Defining the uid as UNIX time, or random if error
         let uid = match SystemTime::now().duration_since(SystemTime::UNIX_EPOCH) {
             Ok(n) => n.as_millis(),

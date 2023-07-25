@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use crate::api::Ship;
 use crate::db::Db;
+// use crossbeam::channel::{Receiver, Sender};
 use serde_json::Value as JsonValue;
 use tokio::sync::{
     mpsc::{UnboundedReceiver, UnboundedSender},
@@ -35,7 +36,7 @@ pub struct NodeContext {
     //  over this end of the channel. the ship_event_receiver (defined further down) will
     //  receive these new messages in a message loop
     pub sender: UnboundedSender<JsonValue>,
-
+    // pub sender: Sender<JsonValue>,
     //
     //  receiver - the output end of an unbounded channel that receives
     //    data sent by the UnboundedSender of the channnel.
@@ -43,6 +44,7 @@ pub struct NodeContext {
     //  calling the recv() method on the UnboundedReceiver requires a mutable
     //  reference. Mutex supports acquiring a mutable reference across threads
     //
+    // pub receiver: Receiver<JsonValue>,
     pub receiver: Arc<Mutex<UnboundedReceiver<JsonValue>>>,
 }
 
