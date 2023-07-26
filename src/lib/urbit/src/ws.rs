@@ -215,13 +215,13 @@ async fn device_connected(
             continue;
         }
         let data = data.unwrap();
-        let data = serde_json::from_str::<ShipAction>(data);
+        let data: serde_json::Result<Vec<ShipAction>> = serde_json::from_str(data);
         if data.is_err() {
             println!("ws: error {:?}", data);
             continue;
         }
         let data = data.unwrap();
-        store.write().await.insert(data.id, my_id);
+        store.write().await.insert(data[0].id, my_id);
         // load a handler for the message
         on_device_message(my_id, msg, &context, &devices).await;
     }
