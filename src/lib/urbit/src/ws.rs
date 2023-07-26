@@ -1,5 +1,3 @@
-// #![deny(warnings)]
-use anyhow::Result;
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
 use lazy_static::lazy_static;
 use reqwest::header::HeaderMap;
@@ -7,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 use std::collections::HashMap;
 use std::sync::{
-    atomic::{AtomicUsize, Ordering},
+    atomic::{AtomicU64, AtomicUsize, Ordering},
     Arc,
 };
 use tokio::task::JoinHandle;
@@ -18,23 +16,54 @@ use warp::Filter;
 
 use crate::context::CallContext;
 
-/// Our global unique device id counter.
+/// global unique device id counter.
 static NEXT_DEVICE_ID: AtomicUsize = AtomicUsize::new(1);
+/// global unique message id counter.
+static NEXT_MESSAGE_ID: AtomicU64 = AtomicU64::new(1);
 
-/// Our state of currently connected devices.
+/// currently connected devices.
 ///
-/// - Key is their id
-/// - Value is a sender of `warp::ws::Message`
+/// - key is the device id (based on NEXT_DEVICE_ID)
+/// - value is a sender of `warp::ws::Message` which sends messages
+///    across the underlying channel to the websocket device sender
 type DeviceMap = HashMap<usize, crossbeam::channel::Sender<Message>>;
 type Devices = Arc<RwLock<DeviceMap>>;
 
-type MsgMap = HashMap<u64, usize>;
-type MsgStore = Arc<RwLock<MsgMap>>;
-
-lazy_static! {
-    static ref SHIP_LISTENER: Arc<RwLock<Option<JoinHandle::<()>>>> = Arc::new(RwLock::new(None));
+#[derive(Debug, Clone)]
+struct MsgEntry {
+    #[allow(dead_code)] // id "not read" warning. disable for now.
+    // unique message id managed by the holon
+    id: u64,
+    // id of the message originating on the device (e.g. urbit action message id)
+    source_id: u64,
+    // id of connected device (key into the DeviceMap)
+    device_id: usize,
 }
 
+// maps holong managed message ids to origin message ids and device
+type MsgMap = HashMap<u64, MsgEntry>;
+
+// thread-safe store of the message map
+// type MsgStore = Arc<RwLock<MsgMap>>;
+
+lazy_static! {
+    //
+    // singleton ship listener managed by the websocket endpoint
+    // only one ship listener is needed per holon process. each ship event is mapped
+    //   by to the originating device use the MsgMap as a lookup (holon_id -> urbit_urbit_message/device pair)
+    //
+    // addt'l: a ship listener thread will only exist if at least on device is connected over websocket
+    //    once all devices are disconnected, the ship listener is terminated, but is respawned on subsequent
+    //    websocket device connections
+    //
+    static ref SHIP_RECEIVER: Arc<RwLock<Option<JoinHandle::<()>>>> = Arc::new(RwLock::new(None));
+    static ref MESSAGE_STORE: Arc<RwLock<MsgMap>> = Arc::new(RwLock::new(MsgMap::new()));
+
+}
+
+// @see: https://developers.urbit.org/reference/arvo/eyre/external-api-ref#responses
+//
+// handles ship responses which are delivered in a variety of flavors
 #[derive(Debug, Deserialize, Serialize)]
 struct ShipResponse {
     id: u64,
@@ -44,6 +73,10 @@ struct ShipResponse {
     ok: Option<String>,
 }
 
+// @see: https://developers.urbit.org/reference/arvo/eyre/external-api-ref#actions
+//
+// loose representation of a ship action which come in a variety of flavors (e.g. poke, subscribe, etc...)
+//   where some of the fields are missing/present depending on the flavor.
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ShipAction {
     id: u64,
@@ -55,28 +88,31 @@ pub struct ShipAction {
     path: Option<String>,
 }
 
+// authorization tokens are required as part of the websocket handshake
+
+// MissingAuthToken is the rejection that is raised when the authorization
+// token is missing from the request
 #[derive(Debug)]
 struct MissingAuthToken;
-
 impl warp::reject::Reject for MissingAuthToken {}
+
+// InvalidAuthToken is the rejection that is raised when the authorization
+// token is provided but deemed to be invalid (e.g. expired or improperly formatted, etc.)
+#[derive(Debug)]
+struct InvalidAuthToken;
+impl warp::reject::Reject for InvalidAuthToken {}
 
 pub async fn start(
     context: CallContext,
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
-    // Turn our "state" into a new Filter...
+    // "filterize" our state
+
     let devices = Devices::default();
     let devices = warp::any().map(move || devices.clone());
 
-    let store = MsgStore::default();
-    let store = warp::any().map(move || store.clone());
-
-    println!(
-        "ws: [start] - [tx, rx]] addresses [{:p}, {:p}]",
-        &context.sender, &context.receiver
-    );
     let with_context = warp::any().map(move || context.clone());
 
-    // GET /chat -> websocket upgrade
+    // GET /ws -> websocket upgrade
     let handler = warp::path!("ws")
         .and(warp::header::headers_cloned())
         .and(with_context)
@@ -99,8 +135,10 @@ pub async fn start(
                     "urbauth-~{}",
                     context.ship.lock().await.ship_name.as_ref().unwrap()
                 );
+
                 #[cfg(feature = "trace")]
                 println!("ws: [start] searching cookie for token '{}'...", cookie_key);
+
                 let cookie_str = headers.get("cookie").unwrap().to_str().unwrap();
                 let parts = cookie_str.split(";");
                 let mut auth_token: Option<&str> = None;
@@ -114,26 +152,22 @@ pub async fn start(
                 if auth_token.is_none() {
                     return Err(warp::reject::custom(MissingAuthToken));
                 }
+
                 #[cfg(feature = "trace")]
                 println!("ws: [start] token => {}", auth_token.unwrap());
                 Ok(context)
             },
         )
         .and(devices)
-        .and(store)
         .and(warp::ws())
-        .map(
-            |context: CallContext, devices: Devices, store: MsgStore, ws: warp::ws::Ws| {
-                // This will call our function if the handshake succeeds.
-                println!(
-                    "ws: [ws_upgrade] - [tx, rx]] addresses [{:p}, {:p}]",
-                    &context.sender, &context.receiver
-                );
-                ws.on_upgrade(move |socket| {
-                    device_connected(socket, devices, store, context.clone())
-                })
-            },
-        );
+        .map(|context: CallContext, devices: Devices, ws: warp::ws::Ws| {
+            // This will call our function if the handshake succeeds.
+            println!(
+                "ws: [ws_upgrade] - [tx, rx]] addresses [{:p}, {:p}]",
+                &context.sender, &context.receiver
+            );
+            ws.on_upgrade(move |socket| device_connected(socket, devices, context.clone()))
+        });
 
     handler
 }
@@ -141,10 +175,9 @@ pub async fn start(
 async fn device_connected(
     ws: WebSocket,
     devices: Devices,
-    store: MsgStore,
     context: CallContext, /*ship_event_receiver: ShipReceiver*/
 ) {
-    // Use a counter to assign a new unique ID for this user.
+    // use a counter to assign a new unique ID for this device.
     let my_id = NEXT_DEVICE_ID.fetch_add(1, Ordering::Relaxed);
 
     eprintln!("new chat user: {}", my_id);
@@ -175,12 +208,12 @@ async fn device_connected(
     // Save the sender in our list of connected devices.
     devices.write().await.insert(my_id, tx);
 
-    if SHIP_LISTENER.read().await.is_none() {
+    // one and only one ship listener per holon process
+    if SHIP_RECEIVER.read().await.is_none() {
         println!("ws: [device_connected] starting ship listener...");
 
         let ship_rx_context = context.clone();
         let ship_rx_devices = devices.clone();
-        let ship_rx_store = store.clone();
 
         // ingest messages coming from the ship's SSE
         let handle = tokio::task::spawn(async move {
@@ -191,11 +224,11 @@ async fn device_connected(
                     "ws: [device_connected] received event from ship => [{}, {}]",
                     my_id, result
                 );
-                on_ship_message(my_id, result, &ship_rx_store, &ship_rx_devices).await;
+                on_ship_message(my_id, result, &ship_rx_devices).await;
             }
         });
 
-        SHIP_LISTENER.write().await.replace(handle);
+        SHIP_RECEIVER.write().await.replace(handle);
     }
 
     // listen for message from connected devices
@@ -221,25 +254,26 @@ async fn device_connected(
             continue;
         }
         let data = data.unwrap();
-        store.write().await.insert(data[0].id, my_id);
+        // use a counter to assign a new unique ID for this message
+        let msg_id = NEXT_MESSAGE_ID.fetch_add(1, Ordering::Relaxed);
+        MESSAGE_STORE.write().await.insert(
+            data[0].id,
+            MsgEntry {
+                id: msg_id,
+                source_id: data[0].id,
+                device_id: my_id,
+            },
+        );
         // load a handler for the message
         on_device_message(my_id, msg, &context, &devices).await;
     }
     // device_ws_rx stream will keep processing as long as the device stays
     // connected. Once they disconnect, then...
     on_device_disconnected(my_id, &devices).await;
-
-    if devices.read().await.len() == 0 {
-        println!("no more connected devices. stopping ship listener...");
-        SHIP_LISTENER.read().await.as_ref().unwrap().abort();
-        println!("after no more connected devices. stopping ship listener...");
-        let mut opt = SHIP_LISTENER.write().await;
-        *opt = None;
-    }
 }
 
 ///
-async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, _devices: &Devices) {
+async fn on_device_message(_my_id: usize, msg: Message, context: &CallContext, _devices: &Devices) {
     // Skip any non-Text messages...
     let msg = if let Ok(s) = msg.to_str() {
         s
@@ -320,14 +354,15 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, _d
     ///////////////////////////////////////////////////////
 }
 
-async fn find_device_id(msg_id: u64, msgs: &MsgStore) -> Option<usize> {
-    let lock = msgs.read().await;
-    let device_id = lock.get(&msg_id);
-    if device_id.is_none() {
+// msg_id - the holon managed message id
+async fn find_msg_entry(msg_id: u64) -> Option<MsgEntry> {
+    let lock = MESSAGE_STORE.read().await;
+    let entry = lock.get(&msg_id);
+    if entry.is_none() {
         return None;
     }
-    let device_id = device_id.unwrap();
-    Some(device_id.clone())
+    let entry = entry.unwrap();
+    Some(entry.clone())
 }
 
 async fn find_device_tx(
@@ -342,7 +377,7 @@ async fn find_device_tx(
     Some(tx.unwrap().clone())
 }
 
-async fn on_ship_message(my_id: usize, msg: JsonValue, msgs: &MsgStore, devices: &Devices) {
+async fn on_ship_message(_my_id: usize, msg: JsonValue, devices: &Devices) {
     let data = serde_json::from_value::<ShipResponse>(msg.clone());
     if data.is_err() {
         println!(
@@ -352,46 +387,60 @@ async fn on_ship_message(my_id: usize, msg: JsonValue, msgs: &MsgStore, devices:
         return;
     }
 
-    let data = data.unwrap();
-    let device_id = find_device_id(data.id, msgs).await;
+    let mut data = data.unwrap();
+    // note the id coming from the ship will be the holon managed message
+    // id. use it to find the corresponding MsgStore entry which provides
+    // the originating message id (e.g. urbit message id)
+    let entry = find_msg_entry(data.id).await;
 
-    if device_id.is_none() {
+    if entry.is_none() {
         println!("ws: [on_ship_message] message {} not found", data.id);
         return;
     }
 
-    let device_id = device_id.unwrap();
-    let tx = find_device_tx(device_id, devices).await;
+    let entry = entry.unwrap();
+    let tx = find_device_tx(entry.device_id, devices).await;
 
     if tx.is_none() {
-        println!("ws: [on_ship_message] device {} not found", device_id);
+        println!("ws: [on_ship_message] device {} not found", entry.device_id);
+    }
+
+    // override the outgoing message's id field with the original message id
+    data.id = entry.source_id;
+
+    let result = serde_json::to_string::<ShipResponse>(&data);
+
+    if result.is_err() {
+        println!("ws: [on_ship_message] error serializing message {:?}", data);
     }
 
     let tx = tx.unwrap();
-    if let Err(_disconnected) = tx.send(Message::text(msg.to_string())) {
+    if let Err(_disconnected) = tx.send(Message::text(result.unwrap())) {
         // The tx is disconnected, our `user_disconnected` code
         // should be happening in another task, nothing more to
         // do here.
     }
-
-    // extract the ide
-    // New message from the ship, send it to all connected devices (except same uid)...
-    // for (&uid, tx) in devices.read().await.iter() {
-    //     if my_id == uid {
-    //         if let Err(_disconnected) = tx.send(Message::text(msg.to_string())) {
-    //             // The tx is disconnected, our `user_disconnected` code
-    //             // should be happening in another task, nothing more to
-    //             // do here.
-    //         }
-    //     }
-    // }
 }
 
 async fn on_device_disconnected(my_id: usize, devices: &Devices) {
-    eprintln!("good bye user: {}", my_id);
+    eprintln!("ws: [on_device_disconnected] removing device {}...", my_id);
 
-    // Stream closed up, so remove from the user list
+    // stream closed up, so remove from the device list
     devices.write().await.remove(&my_id);
+
+    if devices.read().await.len() == 0 {
+        #[cfg(feature = "trace")]
+        println!("no more connected devices. stopping ship listener...");
+
+        // kill the current ship receiver thread
+        SHIP_RECEIVER.read().await.as_ref().unwrap().abort();
+
+        #[cfg(feature = "trace")]
+        println!("after no more connected devices. stopping ship listener...");
+
+        let mut opt = SHIP_RECEIVER.write().await;
+        *opt = None;
+    }
 }
 
 #[cfg(test)]
