@@ -1,5 +1,7 @@
 // #![deny(warnings)]
+use anyhow::Result;
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
+use lazy_static::lazy_static;
 use reqwest::header::HeaderMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
@@ -8,9 +10,9 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
     Arc,
 };
+use tokio::task::JoinHandle;
 
-use tokio::sync::{mpsc, RwLock};
-use tokio_stream::wrappers::UnboundedReceiverStream;
+use tokio::sync::RwLock;
 use warp::ws::{Message, WebSocket};
 use warp::Filter;
 
@@ -23,21 +25,34 @@ static NEXT_DEVICE_ID: AtomicUsize = AtomicUsize::new(1);
 ///
 /// - Key is their id
 /// - Value is a sender of `warp::ws::Message`
-type DeviceMap = HashMap<usize, mpsc::UnboundedSender<Message>>;
+type DeviceMap = HashMap<usize, crossbeam::channel::Sender<Message>>;
 type Devices = Arc<RwLock<DeviceMap>>;
 
-// lazy_static! {
-//     static ref CONNECTED_DEVICES: Devices = Arc::new(RwLock::new(HashMap::new()));
-// }
+type MsgMap = HashMap<u64, usize>;
+type MsgStore = Arc<RwLock<MsgMap>>;
+
+lazy_static! {
+    static ref SHIP_LISTENER: Arc<RwLock<Option<JoinHandle::<()>>>> = Arc::new(RwLock::new(None));
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+struct ShipResponse {
+    id: u64,
+    response: String,
+    json: Option<JsonValue>,
+    err: Option<String>,
+    ok: Option<String>,
+}
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ShipAction {
-    pub id: u64,
-    pub action: String,
-    pub ship: String,
-    pub app: String,
-    pub mark: String,
-    pub json: JsonValue,
+    id: u64,
+    action: String,
+    ship: String,
+    app: String,
+    mark: Option<String>,
+    json: Option<JsonValue>,
+    path: Option<String>,
 }
 
 #[derive(Debug)]
@@ -52,6 +67,9 @@ pub async fn start(
     let devices = Devices::default();
     let devices = warp::any().map(move || devices.clone());
 
+    let store = MsgStore::default();
+    let store = warp::any().map(move || store.clone());
+
     println!(
         "ws: [start] - [tx, rx]] addresses [{:p}, {:p}]",
         &context.sender, &context.receiver
@@ -62,7 +80,6 @@ pub async fn start(
     let handler = warp::path!("ws")
         .and(warp::header::headers_cloned())
         .and(with_context)
-        .and(devices)
         .and_then(
             /*
               ensure that there is a cookie header and that the cookie contains a key=value pair
@@ -74,7 +91,7 @@ pub async fn start(
                  here is a sample cookie string that passes:
                    "urbauth-~ralbes-mislec-lodlev-migdev=0v6.bb0bl.hiu64.et7nk.qljtl.hdurg; Path=/; Max-Age=604800"
             */
-            |headers: HeaderMap, context: CallContext, devices: Devices| async move {
+            |headers: HeaderMap, context: CallContext| async move {
                 if !headers.contains_key("cookie") {
                     return Err(warp::reject::custom(MissingAuthToken));
                 }
@@ -99,18 +116,22 @@ pub async fn start(
                 }
                 #[cfg(feature = "trace")]
                 println!("ws: [start] token => {}", auth_token.unwrap());
-                Ok((context, devices))
+                Ok(context)
             },
         )
+        .and(devices)
+        .and(store)
         .and(warp::ws())
         .map(
-            |(context, devices): (CallContext, Devices), ws: warp::ws::Ws| {
+            |context: CallContext, devices: Devices, store: MsgStore, ws: warp::ws::Ws| {
                 // This will call our function if the handshake succeeds.
                 println!(
                     "ws: [ws_upgrade] - [tx, rx]] addresses [{:p}, {:p}]",
                     &context.sender, &context.receiver
                 );
-                ws.on_upgrade(move |socket| device_connected(socket, devices, context.clone()))
+                ws.on_upgrade(move |socket| {
+                    device_connected(socket, devices, store, context.clone())
+                })
             },
         );
 
@@ -120,6 +141,7 @@ pub async fn start(
 async fn device_connected(
     ws: WebSocket,
     devices: Devices,
+    store: MsgStore,
     context: CallContext, /*ship_event_receiver: ShipReceiver*/
 ) {
     // Use a counter to assign a new unique ID for this user.
@@ -132,13 +154,14 @@ async fn device_connected(
 
     // Use an unbounded channel to handle buffering and flushing of messages
     // to the websocket...
-    let (tx, rx) = mpsc::unbounded_channel();
-    let mut rx = UnboundedReceiverStream::new(rx);
+    // let (tx, mut rx) = mpsc::unbounded_channel();
+    let (tx, rx) = crossbeam::channel::unbounded();
+    // let mut rx = UnboundedReceiverStream::new(rx);
 
     // spawn a task to listen for messages to send to transmit to connected devices
     tokio::task::spawn(async move {
         println!("ws: [device_connected] waiting for outgoing messages...");
-        while let Some(message) = rx.next().await {
+        while let Ok(message) = rx.recv() {
             println!("ws: [device_connected] sending message to device...");
             device_ws_tx
                 .send(message)
@@ -152,21 +175,28 @@ async fn device_connected(
     // Save the sender in our list of connected devices.
     devices.write().await.insert(my_id, tx);
 
-    let ship_rx_context = context.clone();
-    let ship_rx_devices = devices.clone();
+    if SHIP_LISTENER.read().await.is_none() {
+        println!("ws: [device_connected] starting ship listener...");
 
-    // ingest messages coming from the ship's SSE
-    tokio::task::spawn(async move {
-        println!("ws: [device_connected] waiting for ship event...");
+        let ship_rx_context = context.clone();
+        let ship_rx_devices = devices.clone();
+        let ship_rx_store = store.clone();
 
-        while let Ok(result) = ship_rx_context.receiver.recv() {
-            println!(
-                "ws: [device_connected] received event from ship => [{}, {}]",
-                my_id, result
-            );
-            on_ship_message(my_id, result, &ship_rx_devices).await;
-        }
-    });
+        // ingest messages coming from the ship's SSE
+        let handle = tokio::task::spawn(async move {
+            println!("ws: [device_connected] waiting for ship event...");
+
+            while let Ok(result) = ship_rx_context.receiver.recv() {
+                println!(
+                    "ws: [device_connected] received event from ship => [{}, {}]",
+                    my_id, result
+                );
+                on_ship_message(my_id, result, &ship_rx_store, &ship_rx_devices).await;
+            }
+        });
+
+        SHIP_LISTENER.write().await.replace(handle);
+    }
 
     // listen for message from connected devices
     println!("ws: [device_connected] waiting for device message...");
@@ -179,12 +209,33 @@ async fn device_connected(
                 break;
             }
         };
+        let data = msg.to_str();
+        if data.is_err() {
+            println!("ws: error");
+            continue;
+        }
+        let data = data.unwrap();
+        let data = serde_json::from_str::<ShipAction>(data);
+        if data.is_err() {
+            println!("ws: error {:?}", data);
+            continue;
+        }
+        let data = data.unwrap();
+        store.write().await.insert(data.id, my_id);
         // load a handler for the message
         on_device_message(my_id, msg, &context, &devices).await;
     }
     // device_ws_rx stream will keep processing as long as the device stays
     // connected. Once they disconnect, then...
     on_device_disconnected(my_id, &devices).await;
+
+    if devices.read().await.len() == 0 {
+        println!("no more connected devices. stopping ship listener...");
+        SHIP_LISTENER.read().await.as_ref().unwrap().abort();
+        println!("after no more connected devices. stopping ship listener...");
+        let mut opt = SHIP_LISTENER.write().await;
+        *opt = None;
+    }
 }
 
 ///
@@ -269,19 +320,71 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, _d
     ///////////////////////////////////////////////////////
 }
 
-async fn on_ship_message(my_id: usize, msg: JsonValue, devices: &Devices) {
-    // New message from the ship, send it to all connected devices (except same uid)...
-    for (&uid, tx) in devices.read().await.iter() {
-        println!("ws: [device_connected] {} = {} ? ", my_id, uid);
-        if my_id == uid {
-            println!("ws: [on_ship_message] sending message...");
-            if let Err(_disconnected) = tx.send(Message::text(msg.to_string())) {
-                // The tx is disconnected, our `user_disconnected` code
-                // should be happening in another task, nothing more to
-                // do here.
-            }
-        }
+async fn find_device_id(msg_id: u64, msgs: &MsgStore) -> Option<usize> {
+    let lock = msgs.read().await;
+    let device_id = lock.get(&msg_id);
+    if device_id.is_none() {
+        return None;
     }
+    let device_id = device_id.unwrap();
+    Some(device_id.clone())
+}
+
+async fn find_device_tx(
+    device_id: usize,
+    devices: &Devices,
+) -> Option<crossbeam::channel::Sender<Message>> {
+    let lock = devices.read().await;
+    let tx = lock.get(&device_id);
+    if tx.is_none() {
+        return None;
+    }
+    Some(tx.unwrap().clone())
+}
+
+async fn on_ship_message(my_id: usize, msg: JsonValue, msgs: &MsgStore, devices: &Devices) {
+    let data = serde_json::from_value::<ShipResponse>(msg.clone());
+    if data.is_err() {
+        println!(
+            "ws: [on_ship_message] error deserializing ship event => {:?}",
+            serde_json::to_string_pretty(&msg)
+        );
+        return;
+    }
+
+    let data = data.unwrap();
+    let device_id = find_device_id(data.id, msgs).await;
+
+    if device_id.is_none() {
+        println!("ws: [on_ship_message] message {} not found", data.id);
+        return;
+    }
+
+    let device_id = device_id.unwrap();
+    let tx = find_device_tx(device_id, devices).await;
+
+    if tx.is_none() {
+        println!("ws: [on_ship_message] device {} not found", device_id);
+    }
+
+    let tx = tx.unwrap();
+    if let Err(_disconnected) = tx.send(Message::text(msg.to_string())) {
+        // The tx is disconnected, our `user_disconnected` code
+        // should be happening in another task, nothing more to
+        // do here.
+    }
+
+    // extract the ide
+    // New message from the ship, send it to all connected devices (except same uid)...
+    // for (&uid, tx) in devices.read().await.iter() {
+    //     if my_id == uid {
+    //         if let Err(_disconnected) = tx.send(Message::text(msg.to_string())) {
+    //             // The tx is disconnected, our `user_disconnected` code
+    //             // should be happening in another task, nothing more to
+    //             // do here.
+    //         }
+    //     }
+    // }
 }
 
 async fn on_device_disconnected(my_id: usize, devices: &Devices) {
@@ -400,7 +503,7 @@ mod tests {
                         let actions = res.unwrap();
 
                         for i in 0..actions.len() {
-                            println!("[thread-{}]: received actions - {}", i, actions[i].json);
+                            println!("[thread-{}]: received actions - {:?}", i, actions[i].json);
                         }
 
                         RECD_COUNT.fetch_add(1, Ordering::Relaxed);

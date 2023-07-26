@@ -59,7 +59,7 @@ export default function WebSocketClient() {
   };
 
   const disconnect = () => {
-    socketRef.current.send(serialize({ type: 'disconnect' }));
+    // socketRef.current.send(serialize({ type: 'disconnect' }));
     socketRef.current.close();
   };
 
