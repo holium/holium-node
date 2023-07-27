@@ -10,6 +10,9 @@ use std::sync::{
 };
 use tokio::task::JoinHandle;
 
+use colored::*;
+use colored_json::to_colored_json_auto;
+
 use tokio::sync::RwLock;
 use warp::ws::{Message, WebSocket};
 use warp::Filter;
@@ -242,29 +245,7 @@ async fn device_connected(
                 break;
             }
         };
-        let data = msg.to_str();
-        if data.is_err() {
-            println!("ws: error");
-            continue;
-        }
-        let data = data.unwrap();
-        let data: serde_json::Result<Vec<ShipAction>> = serde_json::from_str(data);
-        if data.is_err() {
-            println!("ws: error {:?}", data);
-            continue;
-        }
-        let data = data.unwrap();
-        // use a counter to assign a new unique ID for this message
-        let msg_id = NEXT_MESSAGE_ID.fetch_add(1, Ordering::Relaxed);
-        MESSAGE_STORE.write().await.insert(
-            data[0].id,
-            MsgEntry {
-                id: msg_id,
-                source_id: data[0].id,
-                device_id: my_id,
-            },
-        );
-        // load a handler for the message
+        // process the incoming device message
         on_device_message(my_id, msg, &context, &devices).await;
     }
     // device_ws_rx stream will keep processing as long as the device stays
@@ -273,7 +254,7 @@ async fn device_connected(
 }
 
 ///
-async fn on_device_message(_my_id: usize, msg: Message, context: &CallContext, _devices: &Devices) {
+async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, devices: &Devices) {
     // Skip any non-Text messages...
     let msg = if let Ok(s) = msg.to_str() {
         s
@@ -294,50 +275,98 @@ async fn on_device_message(_my_id: usize, msg: Message, context: &CallContext, _
     let packet = packet.unwrap();
 
     // 1) save packet payload to db
-    // let result = context.db.lsave_packet(&context, &packet).await;
     let result = context.db.save_packet("ws", &packet);
     if result.is_err() {
         println!("ws: [device_message] save_packet_string failed");
         return;
     }
 
-    // 2) post action payload to ship. event source receiver will relay any updates/effects
-    //     back to connected devices
-    // is this the packet an action payload? if so, post to ship.
-    // let actions: serde_json::Result<Vec<ShipAction>> = serde_json::from_str(msg);
+    // 2) Determine if standard urbit action message
+    //
+    //   Urbit actions are submitted as a Json array; therefore any message
+    //   that comes in from a device is a json array is, for now, treated as an urbit action.
+    //   If the message is anything other than an array, it's considered a holon message
+    if packet.is_array() {
+        // 2) post action payload to ship. event source receiver will relay any updates/effects
+        //     back to connected devices
 
-    // if actions.is_err() {
-    //     println!(
-    //         "ws: [device_message] error deserializing message to action array: {}",
-    //         msg
-    //     );
-    //     return;
-    // }
+        // the flow should follow:
+        //   device -[req]-> node -[req]-> ship -[resp]-> node -[resp]-> device
 
-    println!("ws: [device_message] relaying actions payload to ship...");
+        // leverage serde_json deserialization strictly for the validation of the message
+        //  if nothing else
+        let actions: serde_json::Result<Vec<ShipAction>> = serde_json::from_str(msg);
 
-    let result = context.ship.lock().await.post(&packet).await;
+        if actions.is_err() {
+            println!(
+                "ws: [device_message] error deserializing message to action array: {}",
+                msg
+            );
+            return;
+        }
 
-    if result.is_err() {
-        println!("ws: [device_message] proxy.post call failed. {:?}", result);
-        return;
+        let actions = actions.unwrap();
+
+        // to prevent orphaned messages (ship post that succeeds but MESSAGE_STORE persist fails),
+        //   add the holon id <-> urbit id message map entry first. that way if the ship post
+        //   below fails, it may orphan the mapping entry but the message post can still be retried on error
+        let msg_id = NEXT_MESSAGE_ID.fetch_add(1, Ordering::Relaxed);
+        MESSAGE_STORE.write().await.insert(
+            actions[0].id,
+            MsgEntry {
+                id: msg_id,
+                source_id: actions[0].id,
+                device_id: my_id,
+            },
+        );
+
+        #[cfg(feature = "trace")]
+        println!(
+            "{}: {} relaying actions payload:",
+            "[ws]".bright_yellow(),
+            "[device_message]".bright_blue()
+        );
+        #[cfg(feature = "trace")]
+        println!("{}", to_colored_json_auto(&packet).unwrap());
+
+        let result = context.ship.lock().await.post(&packet).await;
+
+        if result.is_err() {
+            // an error here is a big deal. print to holon std out...
+            println!(
+                "[ws]: [device_message] proxy.post call failed. {:?}",
+                result
+            );
+
+            // ...and send error response to connected device over socket
+            return;
+        }
+
+        // no more to do. eventually a response to ship requests will come back thru the
+        //   SHIP_RECEIVER where it will be delivered to the device from whence it originated
+        //   (assuming the device is still connected to the socket)
+    } else {
+        // holon message
+        // this is json object message; therefore it's destination is meant for holon
+        let value: JsonValue = serde_json::from_value(packet).unwrap();
+
+        // for now, echo holon messages back to calling device (no use case for holon
+        //  messages at the time of writing)
+        //  holon message flow: device - [req] -> holon -> [res] -> device
+
+        // send the proxy post response back to the originating device over websocket
+        let tx = devices.read();
+        let tx = tx.await;
+        let tx = tx.get(&my_id);
+        {
+            if tx.is_none() {
+                println!("ws: [device_message] error attempting to read device {} from list of connected devices", my_id);
+                return;
+            }
+            let tx = tx.unwrap();
+            let _ = tx.send(Message::text(value.to_string()));
+        }
     }
-
-    // disable sending messages back to the calling device
-    // the flow should follow:
-    //   device -[req]-> node -[req]-> ship -[resp]-> node -[resp]-> device
-    // send the proxy post response back to the originating device over websocket
-    // let tx = devices.read();
-    // let tx = tx.await;
-    // let tx = tx.get(&my_id);
-    // {
-    //     if tx.is_none() {
-    //         println!("ws: [device_message] error attempting to read device {} from list of connected devices", my_id);
-    //         return;
-    //     }
-    //     let tx = tx.unwrap();
-    //     let _ = tx.send(Message::text(msg.clone()));
-    // }
 
     ////////////////////////////////////////////////////////
     // disable broadcast for now

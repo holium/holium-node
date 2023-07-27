@@ -59,3 +59,21 @@ Holon:
 ### Solution 2 - Dedicated Device Subscriptions
 
 Another solution would be that each device is assigned to its own dedicated ship channel when the websocket connection is first established. This raises a question of efficiency and scale given the future vision of Realm and # of devices we plan to support.
+
+## Message Protocols
+
+holon rules for messaging e.g. formats, data types, etc...
+
+### Urbit
+
+Within an Urbit context, all message protocols for interacting with a ship should follow the protocols set forth in the following document:
+
+https://developers.urbit.org/reference/arvo/eyre/external-api-ref
+
+### holon
+
+holon supports interactions and features outside of Urbit.
+
+```json
+{}
+```

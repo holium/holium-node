@@ -8,6 +8,8 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.71"
 bedrock-db = { path = "../../lib/db" }
+colored = "2.0.4"
+colored_json = "3.2.0"
 crossbeam = "0.8.2"
 eventsource-threaded = "0.1.0"
 lazy_static = "1.4.0"

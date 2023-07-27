@@ -21,6 +21,68 @@ let nextMessageId = 1;
 // messages
 let msgs = {};
 
+function on_urbit_event(data) {
+  if (!msgs.hasOwnProperty(data.id)) {
+    console.warn(
+      `ws: [on_urbit_event] message received with no corresponding client side queue entry. detail: ${data}`
+    );
+  }
+
+  console.log(`acking ${data.id} msg-id=${nextMessageId + 1}`);
+  // ack the event before doing anything else
+  window.ws.send(
+    JSON.stringify([
+      {
+        id: nextMessageId++,
+        action: 'ack',
+        'event-id': data.id,
+      },
+    ])
+  );
+
+  // remove the message from the queue
+  delete msgs[data.id];
+
+  if ('err' in data) {
+    console.error(
+      `ws: [on_urbit_event] ${data.id} ${data.response} error: ${data.err}`
+    );
+    // localStorage.set(`error-${msg.id}`, event.data);
+    return;
+  }
+
+  switch (data.response) {
+    case 'diff':
+      {
+        if (msgs[data.id].handler) {
+          msgs[data.id].handler(data.json);
+        } else {
+          console.warn(`ws: [on_urbit_event] no handler for ${data}`);
+        }
+      }
+      break;
+
+    case 'quit':
+      {
+        console.log(`ws: [on_urbit_event] quit received`);
+      }
+      break;
+
+    case 'poke':
+      {
+        console.log(`ws: [on_urbit_event] poke received`);
+      }
+      break;
+
+    default:
+      console.warn(
+        `ws: [on_urbit_event] ${data.id} unrecognized message 'response' field => %o`,
+        data
+      );
+      break;
+  }
+}
+
 window.connectWs = (url) => {
   if (window.ws) {
     console.warn(
@@ -35,68 +97,24 @@ window.connectWs = (url) => {
   };
 
   ws.onmessage = (event) => {
-    console.log('ws: [onmessage] message received. %o', event);
-
-    let msg = JSON.parse(event.data);
-
-    if (!msgs.hasOwnProperty(msg.id)) {
-      console.warn(
-        `ws: [onmessage] message received with no corresponding client side queue entry. detail: ${msg}`
-      );
+    let data = undefined;
+    try {
+      data = JSON.parse(event.data);
+    } catch (e) {
+      console.error(e);
+      data = event;
     }
 
-    console.log(`acking ${msg.id} msg-id=${nextMessageId + 1}`);
-    // ack the event before doing anything else
-    ws.send(
-      JSON.stringify([
-        {
-          id: nextMessageId++,
-          action: 'ack',
-          'event-id': msg.id,
-        },
-      ])
-    );
+    console.log('ws: [onmessage] event received. %o', data);
 
-    // remove the message from the queue
-    delete msgs[msg.id];
-
-    if ('err' in msg) {
-      console.error(
-        `ws: [onmessage] ${msg.id} ${msg.response} error: ${msg.err}`
-      );
-      // localStorage.set(`error-${msg.id}`, event.data);
-      return;
-    }
-
-    switch (msg.response) {
-      case 'diff':
-        {
-          if (msgs[msg.id].handler) {
-            msgs[msg.id].handler(msg.json);
-          } else {
-            console.warn(`ws: [onmessage] no handler for ${msg}`);
-          }
-        }
-        break;
-
-      case 'quit':
-        {
-          console.log(`ws: [onmessage] quit received`);
-        }
-        break;
-
-      case 'poke':
-        {
-          console.log(`ws: [onmessage] poke received`);
-        }
-        break;
-
-      default:
-        console.warn(
-          `ws: [onmessage] ${msg.id} unrecognized message 'response' field => %o`,
-          msg
-        );
-        break;
+    // assume that if the message has response and id fields that it is an urbit
+    //  ship response. see: https://developers.urbit.org/reference/arvo/eyre/external-api-ref#responses
+    if (typeof data === 'object' && 'id' in data && 'response' in data) {
+      on_urbit_event(data);
+    } else {
+      // all other data coming in from socket has been echo'd back to us
+      //  this is considered a holon response; therefore for now simply print the value
+      console.log('ws: [onmessage] - event is a holon response');
     }
   };
 
@@ -165,7 +183,16 @@ window.connectWs = (url) => {
   // note: if the actions array payloads contain an id value, this value will not be overwritten
   //  and will be used as-is. if there is no id, one will be generated based on nextMessageId value
   ws.send_raw = (message) => {
-    let payload = ws.prepare(message);
+    let payload = message;
+
+    // for now assuming that anything that is an array, is a valid
+    //  urbit action message
+    if (Array.isArray(message)) {
+      // add the message to the queue to properly ack it when
+      //   the holon responds
+      payload = ws.prepare(message);
+    }
+
     ws.send(JSON.stringify(payload));
   };
 

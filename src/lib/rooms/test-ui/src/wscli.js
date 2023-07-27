@@ -13,7 +13,11 @@ export default function WebSocketClient() {
   const sendPayload = () => {
     try {
       let parsedPayload = unserialize(payload);
-      socketRef.current.send_raw(parsedPayload);
+      if (parsedPayload !== undefined) {
+        socketRef.current.send_raw(parsedPayload);
+      } else {
+        socketRef.current.send_raw(payload);
+      }
     } catch (e) {
       console.log('invalid json', e);
     }
