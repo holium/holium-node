@@ -54,7 +54,7 @@ pub fn trace(
 
     let (_, name) = module_path.rsplit_once(':').unwrap();
     // let prefix = format!("{}:", name);
-    let _ = write!(&mut buffer, "[{}:(", name);
+    let _ = write!(&mut buffer, "{}:[", name);
     // let _ = write!(&mut buffer, "\t[");
     // let _ = write!(&mut buffer, " [");
     let _ = buffer.set_color(ColorSpec::new().set_intense(true).set_fg(Some(Color::Cyan)));
@@ -66,9 +66,9 @@ pub fn trace(
     let _ = buffer.reset();
     let _ = write!(
         &mut buffer,
-        "{:width$}",
-        ")]",
-        width = 20 - std::cmp::min(20, fn_name.len() + name.len() + 4)
+        // "{:width$}",
+        "]",
+        // width = 20 - std::cmp::min(20, fn_name.len() + name.len() + 4)
     );
     // let _ = write!(&mut buffer, "[{}]", buf2.);
     let _ = buffer.reset();
@@ -82,8 +82,8 @@ pub fn trace(
     }
     let _ = write!(&mut buffer, " {}", msg);
 
-    let _ = bufwtr.print(&buffer);
     let _ = buffer.reset();
+    let _ = bufwtr.print(&buffer);
 }
 
 pub fn etrace(
@@ -132,8 +132,8 @@ pub fn etrace(
     let _ = buffer.reset();
     let _ = write!(&mut buffer, ")");
 
-    let _ = bufwtr.print(&buffer);
     let _ = buffer.reset();
+    let _ = bufwtr.print(&buffer);
 }
 
 #[macro_export]
