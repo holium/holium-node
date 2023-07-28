@@ -53,13 +53,25 @@ pub fn trace(
     let _ = buffer.reset();
 
     let (_, name) = module_path.rsplit_once(':').unwrap();
-    let _ = write!(&mut buffer, "{}/", name);
+    // let prefix = format!("{}:", name);
+    let _ = write!(&mut buffer, "[{}:(", name);
     // let _ = write!(&mut buffer, "\t[");
+    // let _ = write!(&mut buffer, " [");
     let _ = buffer.set_color(ColorSpec::new().set_intense(true).set_fg(Some(Color::Cyan)));
-    let _ = write!(&mut buffer, "{}", fn_name);
+    let _ = write!(
+        &mut buffer,
+        "{}",    //:width$}",
+        fn_name  // width = std::cmp::min(12, fn_name.len())
+    );
     let _ = buffer.reset();
-
-    let _ = write!(&mut buffer, ":");
+    let _ = write!(
+        &mut buffer,
+        "{:width$}",
+        ")]",
+        width = 20 - std::cmp::min(20, fn_name.len() + name.len() + 4)
+    );
+    // let _ = write!(&mut buffer, "[{}]", buf2.);
+    let _ = buffer.reset();
 
     if clr.is_some() {
         let _ = buffer.set_color(
