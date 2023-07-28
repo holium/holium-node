@@ -12,6 +12,22 @@ pub fn trace_json_ln(value: &JsonValue) {
     println!("{}", to_colored_json_auto(value).unwrap());
 }
 
+#[macro_export]
+macro_rules! trace_json_ln {
+    ($json:expr) => {{
+        #[cfg(feature = "trace")]
+        trace::trace_json_ln($json);
+    }};
+}
+
+#[macro_export]
+macro_rules! trace_json {
+    ($json:expr) => {{
+        #[cfg(feature = "trace")]
+        trace::trace_json($json);
+    }};
+}
+
 pub fn etraceln(
     filename: &str,
     module_path: &str,
@@ -81,8 +97,10 @@ pub fn trace(
         );
     }
     let _ = write!(&mut buffer, " {}", msg);
-
     let _ = buffer.reset();
+
+    // let (_, filename) = file.rsplit_once("/").unwrap();
+    // let _ = write!(&mut buffer, " [{}:{}]", filename, line);
     let _ = bufwtr.print(&buffer);
 }
 
@@ -153,6 +171,7 @@ macro_rules! function {
 #[macro_export]
 macro_rules! trace_green_ln {
       ($($arg:tt)*) => {{
+        #[cfg(feature = "trace")]
         trace::traceln(file!(), module_path!(), line!(), column!(),
          trace::function!(), Some(termcolor::Color::Green), format!("{}", std::format_args!($($arg)*)).as_str())
       }};
@@ -170,13 +189,14 @@ macro_rules! trace_warn_ln {
 macro_rules! trace_err_ln {
   ($($arg:tt)*) => {{
     trace::etraceln(file!(), module_path!(), line!(), column!(),
-      trace::function!(), Some(termcolor::Color::Yellow), format!("{}", std::format_args!($($arg)*)).as_str())
+      trace::function!(), Some(termcolor::Color::Red), format!("{}", std::format_args!($($arg)*)).as_str())
   }};
 }
 
 #[macro_export]
 macro_rules! trace_info_ln {
   ($($arg:tt)*) => {{
+    #[cfg(feature = "trace")]
     trace::traceln(file!(), module_path!(), line!(), column!(),
       trace::function!(), None, format!("{}", std::format_args!($($arg)*)).as_str())
   }};

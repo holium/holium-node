@@ -186,7 +186,6 @@ impl Ship {
         // the deserialized Event from SSE
         let event = msg.unwrap();
 
-        #[cfg(feature = "trace")]
         trace_green_ln!("api: [open_channel] received event:");
 
         let data = serde_json::from_str::<JsonValue>(&event.data);
@@ -207,7 +206,7 @@ impl Ship {
             );
         }
 
-        trace_json_ln(&data);
+        trace_json_ln!(&data);
 
         let id = {
             let id = data.get("id");
@@ -280,9 +279,8 @@ impl Ship {
         // let json = body.to_string();
         let json = serde_json::to_string(body)?;
 
-        #[cfg(feature = "trace")]
         trace_info_ln!("opening channel:");
-        trace_json_ln(&json!({
+        trace_json_ln!(&json!({
           "url": url,
           "session_auth": session_auth,
           "json": &body
@@ -403,7 +401,6 @@ impl Ship {
                     res.status().as_u16()
                 )
             }
-            #[cfg(feature = "trace")]
             trace_green_ln!("ship: [post] success {}", payload.to_string());
             ()
         };

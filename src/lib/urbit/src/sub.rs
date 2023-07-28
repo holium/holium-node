@@ -58,7 +58,6 @@ pub async fn start(ctx: CallContext) -> Result<()> {
             // the deserialized Event from SSE
             let event = msg.unwrap();
 
-            #[cfg(feature = "trace")]
             trace_green_ln!("received event => {}", event);
 
             let data = serde_json::from_str(&event.data);
@@ -73,7 +72,6 @@ pub async fn start(ctx: CallContext) -> Result<()> {
             // log the entire packet to the database
             let _ = ctx.db.save_packet("ship", &data);
 
-            #[cfg(feature = "trace")]
             trace_info_ln!("ship: [listen] sending event to receiver => {}", data);
 
             let send_result = ctx.sender.send(data);

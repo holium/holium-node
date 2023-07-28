@@ -34,6 +34,6 @@ url = "2.2.2"
 
 [features]
 # no features by default
-default = ["trace"]
+default = []
 trace = []
 precheck = []

@@ -1,4 +1,6 @@
-use std::{env, fs};
+#[cfg(feature = "trace")]
+use std::env;
+use std::fs;
 
 use crate::context::CallContext;
 use anyhow::{bail, Result};
@@ -9,7 +11,6 @@ use trace::trace_info_ln;
 pub async fn generate_schema(ctx: &CallContext) -> Result<()> {
     // run thru all the sql files in the migrations folder in numerical
     //  order and execute them
-    #[cfg(feature = "trace")]
     trace_info_ln!("current directory: {:?}", env::current_dir().unwrap());
 
     let mut paths: Vec<_> = fs::read_dir("src/lib/urbit/src/chat/sql")

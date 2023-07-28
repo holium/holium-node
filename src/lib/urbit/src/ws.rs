@@ -147,7 +147,6 @@ pub async fn start(
                     context.ship.lock().await.ship_name.as_ref().unwrap()
                 );
 
-                #[cfg(feature = "trace")]
                 trace_info_ln!("searching cookie for token '{}'...", cookie_key);
 
                 let cookie_str = headers.get("cookie").unwrap().to_str().unwrap();
@@ -165,7 +164,6 @@ pub async fn start(
                     return Err(warp::reject::custom(MissingAuthToken));
                 }
 
-                #[cfg(feature = "trace")]
                 trace_info_ln!("token => {}", auth_token.unwrap());
                 Ok(context)
             },
@@ -201,10 +199,8 @@ async fn device_connected(
 
     // spawn a task to listen for messages to send to transmit to connected devices
     tokio::task::spawn(async move {
-        #[cfg(feature = "trace")]
         trace_info_ln!("waiting for outgoing messages...");
         while let Ok(message) = rx.recv() {
-            #[cfg(feature = "trace")]
             trace_info_ln!("sending message to device...");
             device_ws_tx
                 .send(message)
@@ -220,7 +216,6 @@ async fn device_connected(
 
     // one and only one ship listener per holon process
     if SHIP_RECEIVER.read().await.is_none() {
-        #[cfg(feature = "trace")]
         trace_info_ln!("starting ship listener...");
 
         let ship_rx_context = context.clone();
@@ -228,11 +223,9 @@ async fn device_connected(
 
         // ingest messages coming from the ship's SSE
         let handle = tokio::task::spawn(async move {
-            #[cfg(feature = "trace")]
             trace_info_ln!("waiting for ship event...");
 
             while let Ok(result) = ship_rx_context.receiver.recv() {
-                #[cfg(feature = "trace")]
                 trace_info_ln!("received event from ship => [{}, {}]", my_id, result);
                 on_ship_message(my_id, result, &ship_rx_devices).await;
             }
@@ -242,7 +235,6 @@ async fn device_connected(
     }
 
     // listen for message from connected devices
-    #[cfg(feature = "trace")]
     trace_info_ln!("waiting for device message...");
     while let Some(result) = device_ws_rx.next().await {
         let msg = match result {
@@ -268,7 +260,6 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
         return;
     };
 
-    #[cfg(feature = "trace")]
     trace_info_ln!("[{}, {}]", my_id, msg);
 
     let packet: serde_json::Result<JsonValue> = serde_json::from_str(msg);
@@ -323,10 +314,8 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
             },
         );
 
-        #[cfg(feature = "trace")]
         trace_info_ln!("relaying actions payload");
-        #[cfg(feature = "trace")]
-        trace_json_ln(&packet);
+        trace_json_ln!(&packet);
 
         let result = context.ship.lock().await.post(&packet).await;
 
@@ -433,6 +422,10 @@ async fn on_ship_message(_my_id: usize, msg: JsonValue, devices: &Devices) {
     // override the outgoing message's id field with the original message id
     data.id = entry.source_id;
 
+    if data.err.is_some() {
+        trace_err_ln!("error in ship response {:?}", data);
+    }
+
     let result = serde_json::to_string::<ShipResponse>(&data);
 
     if result.is_err() {
@@ -454,13 +447,11 @@ async fn on_device_disconnected(my_id: usize, devices: &Devices) {
     devices.write().await.remove(&my_id);
 
     if devices.read().await.len() == 0 {
-        #[cfg(feature = "trace")]
         trace_warn_ln!("no more connected devices. stopping ship listener...");
 
         // kill the current ship receiver thread
         SHIP_RECEIVER.read().await.as_ref().unwrap().abort();
 
-        #[cfg(feature = "trace")]
         trace_warn_ln!("after no more connected devices. stopping ship listener...");
 
         let mut opt = SHIP_RECEIVER.write().await;
