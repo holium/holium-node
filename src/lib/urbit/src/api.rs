@@ -11,6 +11,8 @@ use eventsource_threaded::{EventSource, ReceiverSource};
 use crate::error::{Result as UrbitResult, UrbitAPIError};
 use rand::Rng;
 
+use trace::{trace_err_ln, trace_green_ln, trace_info_ln, trace_json_ln, trace_warn_ln};
+
 pub static SUBSCRIPTION_MSG_ID: u64 = u64::MAX - 1;
 // static NEXT_MESSAGE_ID: AtomicU64 = AtomicU64::new(u64::MAX - 1000);
 
@@ -167,7 +169,7 @@ impl Ship {
         // now open the EventSource and retrieve/ack the poke event from above.
         //  only after ALL of this succeeds should we return the receiver and start polling
         let receiver = EventSource::new(url_structured, headers);
-        println!("api: [open_channel] waiting for open channel confirmation event...");
+        trace_info_ln!("waiting for open channel confirmation event...");
 
         let msg = receiver.recv();
 
@@ -185,7 +187,7 @@ impl Ship {
         let event = msg.unwrap();
 
         #[cfg(feature = "trace")]
-        println!("api: [open_channel] received event => {}", event);
+        trace_green_ln!("api: [open_channel] received event:");
 
         let data = serde_json::from_str::<JsonValue>(&event.data);
 
@@ -204,6 +206,8 @@ impl Ship {
                 event.data
             );
         }
+
+        trace_json_ln(&data);
 
         let id = {
             let id = data.get("id");
@@ -277,11 +281,13 @@ impl Ship {
         let json = serde_json::to_string(body)?;
 
         #[cfg(feature = "trace")]
-        println!(
-            "ship: [start_listener] opening channel [{}, {}, {}]...",
-            url, session_auth, json
-        );
-        println!("ship: [start_listener] opening channel @ {}...", url);
+        trace_info_ln!("opening channel:");
+        trace_json_ln(&json!({
+          "url": url,
+          "session_auth": session_auth,
+          "json": &body
+        })); //  [{}, {}, {}]...", url, session_auth, json);
+        trace_info_ln!("opening channel @ {}...", url);
 
         let req = self
             .req_client
@@ -320,10 +326,10 @@ impl Ship {
                 .header("Content-Type", "application/json");
             let result = resp.send().await?;
             if result.status().as_u16() == StatusCode::FORBIDDEN {
-                println!("ship: [scry] session expired. logging in...");
+                trace_warn_ln!("ship: [scry] session expired. logging in...");
                 let result = self.login().await;
                 if result.is_err() {
-                    println!("ship: [scry] login failed");
+                    trace_err_ln!("login failed");
                     return Err(UrbitAPIError::FailedToLogin);
                 }
                 let resp = self
@@ -333,16 +339,13 @@ impl Ship {
                     .header("Content-Type", "application/json");
                 let result = resp.send().await?;
                 if result.status().as_u16() != 200 {
-                    println!(
-                        "ship/api: [scry] retry failed. error {}",
-                        result.status().as_u16()
-                    );
+                    trace_err_ln!("retry failed. error {}", result.status().as_u16());
                     return Err(UrbitAPIError::StatusCode(result.status().as_u16()));
                 }
                 break 'response_json result.json().await.unwrap();
             }
             if result.status() != 200 {
-                println!("ship: [post] failed to post payload");
+                trace_err_ln!("failed to post payload");
                 return Err(UrbitAPIError::StatusCode(result.status().as_u16()));
             }
             result.json().await.unwrap()
@@ -358,8 +361,8 @@ impl Ship {
         let session_auth = self.session_auth.as_ref().unwrap().to_string();
         let channel_url = self.channel_url.as_ref().unwrap().to_string();
         let post_result: () = 'result: {
-            println!(
-                "ship: [post] posting message to '{}'...",
+            trace_info_ln!(
+                "posting message to '{}'...",
                 self.channel_url.as_ref().unwrap().to_string()
             );
             let res = self
@@ -373,8 +376,8 @@ impl Ship {
             // if it's a 403, this indicates the auth header is invalid or expired
             //  try to fetch another token and retry
             if res.status() == StatusCode::FORBIDDEN {
-                println!(
-                    "ship: [post] 403. retrying. posting message to '{}'...",
+                trace_warn_ln!(
+                    "403. retrying. posting message to '{}'...",
                     self.channel_url.as_ref().unwrap().to_string()
                 );
                 let result = self.login().await;
@@ -401,7 +404,7 @@ impl Ship {
                 )
             }
             #[cfg(feature = "trace")]
-            println!("ship: [post] success {}", payload.to_string());
+            trace_green_ln!("ship: [post] success {}", payload.to_string());
             ()
         };
         Ok(post_result)

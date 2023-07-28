@@ -11,6 +11,8 @@ use crate::context::CallContext;
 use anyhow::{bail, Result};
 use serde_json::json;
 
+use trace::{trace_err_ln, trace_green_ln, trace_info_ln, trace_warn_ln};
+
 pub async fn start(ctx: CallContext) -> Result<()> {
     let receiver = ctx.ship.lock().await.open_channel().await;
 
@@ -22,19 +24,19 @@ pub async fn start(ctx: CallContext) -> Result<()> {
 
     tokio::spawn(async move {
         loop {
-            println!("ship: [listen] waiting for ship event...",);
+            trace_info_ln!("waiting for ship event...",);
 
             let msg = receiver.recv();
 
             if msg.is_err() {
-                println!("ship: [listen] event receive error. msg => {:?}", msg.err());
+                trace_err_ln!("event receive error. msg => {:?}", msg.err());
                 continue;
             }
 
             let msg = msg.unwrap();
 
             if msg.is_err() {
-                println!("ship: [listen] event request error. msg => {:?}", msg);
+                trace_err_ln!("event request error. msg => {:?}", msg);
 
                 let msg = json!({
                   "id": 4884,
@@ -42,12 +44,12 @@ pub async fn start(ctx: CallContext) -> Result<()> {
                   "error": "ship-stream-disconnected",
                 });
 
-                println!("ship: [listen] forwarding error to devices => {}", msg);
+                trace_warn_ln!("forwarding error to devices => {}", msg);
 
                 let send_result = ctx.sender.send(msg);
 
                 if send_result.is_err() {
-                    println!("ship: [listen] error sending packet => {:?}", send_result);
+                    trace_err_ln!("error sending packet => {:?}", send_result);
                 }
 
                 continue;
@@ -57,12 +59,12 @@ pub async fn start(ctx: CallContext) -> Result<()> {
             let event = msg.unwrap();
 
             #[cfg(feature = "trace")]
-            println!("ship: [listen] received event => {}", event);
+            trace_green_ln!("received event => {}", event);
 
             let data = serde_json::from_str(&event.data);
 
             if data.is_err() {
-                println!("ship: [listen] error deserializing event source message to json");
+                trace_err_ln!("error deserializing event source message to json");
                 continue;
             }
 
@@ -72,17 +74,12 @@ pub async fn start(ctx: CallContext) -> Result<()> {
             let _ = ctx.db.save_packet("ship", &data);
 
             #[cfg(feature = "trace")]
-            println!("ship: [listen] sending event to receiver => {}", data);
-
-            println!(
-                "ship: [start] - [tx, rx]] addresses [{:p}, {:p}]",
-                &ctx.sender, &ctx.receiver
-            );
+            trace_info_ln!("ship: [listen] sending event to receiver => {}", data);
 
             let send_result = ctx.sender.send(data);
 
             if send_result.is_err() {
-                println!("ship: [listen] error sending packet => {:?}", send_result);
+                trace_err_ln!("ship: [listen] error sending packet => {:?}", send_result);
             }
         }
     });

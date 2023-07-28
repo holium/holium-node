@@ -4,11 +4,14 @@ use crate::context::CallContext;
 use anyhow::{bail, Result};
 
 use super::types::ChatTables;
+use trace::trace_info_ln;
 
 pub async fn generate_schema(ctx: &CallContext) -> Result<()> {
     // run thru all the sql files in the migrations folder in numerical
     //  order and execute them
-    println!("current directory: {:?}", env::current_dir().unwrap());
+    #[cfg(feature = "trace")]
+    trace_info_ln!("current directory: {:?}", env::current_dir().unwrap());
+
     let mut paths: Vec<_> = fs::read_dir("src/lib/urbit/src/chat/sql")
         .unwrap()
         .map(|r| r.unwrap())
@@ -17,7 +20,7 @@ pub async fn generate_schema(ctx: &CallContext) -> Result<()> {
     // let conn = mgr.as_ref().unwrap().get().unwrap();
     ctx.db.pool.get_conn()?.execute_batch("BEGIN TRANSACTION")?;
     for path in paths {
-        println!("processing sql file '{}'...", path.path().display());
+        trace_info_ln!("processing sql file '{}'...", path.path().display());
         // read file contents and execute contents
         let sql = fs::read_to_string(path.path())?;
         ctx.db.pool.get_conn()?.execute_batch(sql.as_str())?;
@@ -56,7 +59,7 @@ pub async fn import_data(ctx: &CallContext) -> Result<()> {
 
     let root: ChatTables = serde_json::from_value(response)?;
 
-    println!("processing chat messages...");
+    trace_info_ln!("processing chat messages...");
 
     let mut result = conn.execute_batch("BEGIN");
 

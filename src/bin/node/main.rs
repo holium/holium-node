@@ -15,6 +15,7 @@ use crossbeam::channel::unbounded;
 // use tokio::time::{sleep, Duration};
 
 use structopt::StructOpt;
+use trace::{trace_err_ln, trace_info_ln};
 use urbit_api::api::Ship;
 
 use warp_reverse_proxy::reverse_proxy_filter;
@@ -242,7 +243,7 @@ struct ErrorMessage {
 
 async fn handle_unauthorized(reject: Rejection) -> Result<impl Reply, Rejection> {
     if cfg!(feature = "trace") {
-        println!("handle_unauthorized: {:?}", reject);
+        trace_info_ln!("handle_unauthorized: {:?}", reject);
     }
 
     if reject.is_not_found() {
@@ -273,7 +274,7 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
         message = "FORBIDDEN";
     } else {
         // We should have expected this... Just log and say its a 500
-        eprintln!("unhandled rejection: {:?}", err);
+        trace_err_ln!("unhandled rejection: {:?}", err);
         code = StatusCode::INTERNAL_SERVER_ERROR;
         message = "INTERNAL_SERVER_ERROR";
     }
@@ -314,12 +315,12 @@ fn handle_response(path: &str, data: JsonValue) -> Result<(), warp::Rejection> {
         .unwrap();
     if is_valid {
         if cfg!(feature = "trace") {
-            println!("cookie valid {}", path)
+            trace_info_ln!("cookie valid {}", path)
         }
         return Ok(());
     } else {
         if cfg!(feature = "trace") {
-            println!("cookie invalid {}", path)
+            trace_err_ln!("cookie invalid {}", path)
         }
         return Err(reject_on_path(path));
     }

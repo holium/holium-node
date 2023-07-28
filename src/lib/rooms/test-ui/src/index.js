@@ -44,10 +44,7 @@ function on_urbit_event(data) {
   delete msgs[data.id];
 
   if ('err' in data) {
-    console.error(
-      `ws: [on_urbit_event] ${data.id} ${data.response} error: ${data.err}`
-    );
-    // localStorage.set(`error-${msg.id}`, event.data);
+    console.error(`ws: [on_urbit_event] error: %o`, data);
     return;
   }
 

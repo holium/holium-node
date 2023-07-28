@@ -16,8 +16,11 @@ export default function WebSocketClient() {
       if (parsedPayload !== undefined) {
         socketRef.current.send_raw(parsedPayload);
       } else {
-        socketRef.current.send_raw(payload);
+        console.error('error parsing payload');
       }
+      // } else {
+      //   socketRef.current.send_raw(payload);
+      // }
     } catch (e) {
       console.log('invalid json', e);
     }
@@ -73,7 +76,7 @@ export default function WebSocketClient() {
 
   const unserialize = (data) => {
     try {
-      return JSON.parse(data.toString());
+      return JSON.parse(data); //.toString());
     } catch (e) {
       return undefined;
     }

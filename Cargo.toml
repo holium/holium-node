@@ -13,6 +13,7 @@ default-run = "holon"
 bedrock-db = { path = "./src/lib/db" }
 # holon-log = { path = "./src/lib/log" }
 rooms = { path = "./src/lib/rooms" }
+trace = { path = "./src/lib/trace" }
 urbit-api = { path = "./src/lib/urbit" }
 bytes = "1.0"
 crossbeam = "0.8.2"
@@ -24,6 +25,7 @@ term-table = "1.1"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0.96"
 structopt = "0.3"
+termcolor = "1.2.0"
 tokio = { version = "1", features = ["full"] }
 warp-reverse-proxy = "1.0.0"
 warp-sessions = "1.0.19"

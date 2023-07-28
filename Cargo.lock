@@ -299,17 +299,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "colored"
-version = "2.0.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2674ec482fbc38012cf31e6c42ba0177b431a0cb6f15fe40efa5aab1bda516f6"
-dependencies = [
- "is-terminal",
- "lazy_static",
- "windows-sys 0.48.0",
-]
-
-[[package]]
 name = "colored_json"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -874,7 +863,9 @@ dependencies = [
  "serde_json",
  "structopt",
  "term-table",
+ "termcolor",
  "tokio 1.28.2",
+ "trace",
  "urbit-api",
  "uuid",
  "warp",
@@ -2031,6 +2022,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "termcolor"
+version = "1.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "be55cf8942feac5c765c2c993422806843c9a9a45d4d5c407ad6dd2ea95eb9b6"
+dependencies = [
+ "winapi-util",
+]
+
+[[package]]
 name = "textwrap"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2200,6 +2200,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6bc1c9ce2b5135ac7f93c72918fc37feb872bdc6a5533a8b85eb4b86bfdae52"
 
 [[package]]
+name = "trace"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "colored_json",
+ "serde",
+ "serde_json",
+ "termcolor",
+]
+
+[[package]]
 name = "tracing"
 version = "0.1.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2257,9 +2268,9 @@ dependencies = [
 
 [[package]]
 name = "tungstenite"
-version = "0.19.0"
+version = "0.20.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "15fba1a6d6bb030745759a9a2a588bfe8490fc8b4751a277db3a0be1c9ebbf67"
+checksum = "e862a1c4128df0112ab625f55cd5c934bcb4312ba80b39ae4b4835a3fd58e649"
 dependencies = [
  "byteorder",
  "bytes 1.4.0",
@@ -2338,7 +2349,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bedrock-db",
- "colored",
  "colored_json",
  "crossbeam",
  "eventsource-threaded",
@@ -2349,11 +2359,13 @@ dependencies = [
  "reqwest 0.11.18",
  "serde",
  "serde_json",
+ "termcolor",
  "thiserror",
  "tokio 1.28.2",
  "tokio-stream",
  "tokio-tungstenite",
- "tungstenite 0.19.0",
+ "trace",
+ "tungstenite 0.20.0",
  "url",
  "warp",
  "warp-real-ip",
@@ -2619,6 +2631,15 @@ name = "winapi-i686-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ac3b87c63620426dd9b991e5ce0329eff545bccbbb34f3be09ff6fb6ab51b7b6"
+
+[[package]]
+name = "winapi-util"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70ec6ce85bb158151cae5e5c87f95a8e97d2c0c4b001223f33a334e3ce5de178"
+dependencies = [
+ "winapi 0.3.9",
+]
 
 [[package]]
 name = "winapi-x86_64-pc-windows-gnu"

@@ -10,14 +10,13 @@ use std::sync::{
 };
 use tokio::task::JoinHandle;
 
-use colored::*;
-use colored_json::to_colored_json_auto;
-
 use tokio::sync::RwLock;
 use warp::ws::{Message, WebSocket};
 use warp::Filter;
 
 use crate::context::CallContext;
+
+use trace::{trace_err_ln, trace_green_ln, trace_info_ln, trace_json_ln, trace_warn_ln};
 
 /// global unique device id counter.
 static NEXT_DEVICE_ID: AtomicUsize = AtomicUsize::new(1);
@@ -84,11 +83,20 @@ struct ShipResponse {
 pub struct ShipAction {
     id: u64,
     action: String,
-    ship: String,
-    app: String,
+    // poke/subscribe required field
+    ship: Option<String>,
+    // poke/subscribe required field
+    app: Option<String>,
+    // poke required field
     mark: Option<String>,
+    // poke required field
     json: Option<JsonValue>,
+    // subscribe required field
     path: Option<String>,
+    // ack required field
+    // officially field name is "event-id", rename to put it into struct friendly form
+    #[serde(rename = "event-id")]
+    event_id: Option<u64>,
 }
 
 // authorization tokens are required as part of the websocket handshake
@@ -140,7 +148,7 @@ pub async fn start(
                 );
 
                 #[cfg(feature = "trace")]
-                println!("ws: [start] searching cookie for token '{}'...", cookie_key);
+                trace_info_ln!("searching cookie for token '{}'...", cookie_key);
 
                 let cookie_str = headers.get("cookie").unwrap().to_str().unwrap();
                 let parts = cookie_str.split(";");
@@ -153,11 +161,12 @@ pub async fn start(
                     }
                 }
                 if auth_token.is_none() {
+                    trace_err_ln!("missing auth token");
                     return Err(warp::reject::custom(MissingAuthToken));
                 }
 
                 #[cfg(feature = "trace")]
-                println!("ws: [start] token => {}", auth_token.unwrap());
+                trace_info_ln!("token => {}", auth_token.unwrap());
                 Ok(context)
             },
         )
@@ -165,10 +174,6 @@ pub async fn start(
         .and(warp::ws())
         .map(|context: CallContext, devices: Devices, ws: warp::ws::Ws| {
             // This will call our function if the handshake succeeds.
-            println!(
-                "ws: [ws_upgrade] - [tx, rx]] addresses [{:p}, {:p}]",
-                &context.sender, &context.receiver
-            );
             ws.on_upgrade(move |socket| device_connected(socket, devices, context.clone()))
         });
 
@@ -183,7 +188,7 @@ async fn device_connected(
     // use a counter to assign a new unique ID for this device.
     let my_id = NEXT_DEVICE_ID.fetch_add(1, Ordering::Relaxed);
 
-    eprintln!("new chat user: {}", my_id);
+    trace_green_ln!("new chat user: {}", my_id);
 
     // Split the socket into a sender and receive of messages.
     let (mut device_ws_tx, mut device_ws_rx) = ws.split();
@@ -196,13 +201,15 @@ async fn device_connected(
 
     // spawn a task to listen for messages to send to transmit to connected devices
     tokio::task::spawn(async move {
-        println!("ws: [device_connected] waiting for outgoing messages...");
+        #[cfg(feature = "trace")]
+        trace_info_ln!("waiting for outgoing messages...");
         while let Ok(message) = rx.recv() {
-            println!("ws: [device_connected] sending message to device...");
+            #[cfg(feature = "trace")]
+            trace_info_ln!("sending message to device...");
             device_ws_tx
                 .send(message)
                 .unwrap_or_else(|e| {
-                    eprintln!("websocket send error: {}", e);
+                    trace_err_ln!("websocket send error: {}", e);
                 })
                 .await;
         }
@@ -213,20 +220,20 @@ async fn device_connected(
 
     // one and only one ship listener per holon process
     if SHIP_RECEIVER.read().await.is_none() {
-        println!("ws: [device_connected] starting ship listener...");
+        #[cfg(feature = "trace")]
+        trace_info_ln!("starting ship listener...");
 
         let ship_rx_context = context.clone();
         let ship_rx_devices = devices.clone();
 
         // ingest messages coming from the ship's SSE
         let handle = tokio::task::spawn(async move {
-            println!("ws: [device_connected] waiting for ship event...");
+            #[cfg(feature = "trace")]
+            trace_info_ln!("waiting for ship event...");
 
             while let Ok(result) = ship_rx_context.receiver.recv() {
-                println!(
-                    "ws: [device_connected] received event from ship => [{}, {}]",
-                    my_id, result
-                );
+                #[cfg(feature = "trace")]
+                trace_info_ln!("received event from ship => [{}, {}]", my_id, result);
                 on_ship_message(my_id, result, &ship_rx_devices).await;
             }
         });
@@ -235,13 +242,13 @@ async fn device_connected(
     }
 
     // listen for message from connected devices
-    println!("ws: [device_connected] waiting for device message...");
+    #[cfg(feature = "trace")]
+    trace_info_ln!("waiting for device message...");
     while let Some(result) = device_ws_rx.next().await {
-        println!("{:?}", result);
         let msg = match result {
             Ok(msg) => msg,
             Err(e) => {
-                eprintln!("websocket error(uid={}): {}", my_id, e);
+                trace_err_ln!("websocket error(uid={}): {}", my_id, e);
                 break;
             }
         };
@@ -253,7 +260,6 @@ async fn device_connected(
     on_device_disconnected(my_id, &devices).await;
 }
 
-///
 async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, devices: &Devices) {
     // Skip any non-Text messages...
     let msg = if let Ok(s) = msg.to_str() {
@@ -263,12 +269,12 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
     };
 
     #[cfg(feature = "trace")]
-    println!("ws: [device_message] [{}, {}]", my_id, msg);
+    trace_info_ln!("[{}, {}]", my_id, msg);
 
     let packet: serde_json::Result<JsonValue> = serde_json::from_str(msg);
 
     if packet.is_err() {
-        println!("ws: [device_message] payload not valid json");
+        trace_err_ln!("payload not valid json");
         return;
     }
 
@@ -277,7 +283,7 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
     // 1) save packet payload to db
     let result = context.db.save_packet("ws", &packet);
     if result.is_err() {
-        println!("ws: [device_message] save_packet_string failed");
+        trace_err_ln!("save_packet_string failed");
         return;
     }
 
@@ -298,10 +304,7 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
         let actions: serde_json::Result<Vec<ShipAction>> = serde_json::from_str(msg);
 
         if actions.is_err() {
-            println!(
-                "ws: [device_message] error deserializing message to action array: {}",
-                msg
-            );
+            trace_err_ln!("error deserializing message to action array: {}", msg);
             return;
         }
 
@@ -321,22 +324,15 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
         );
 
         #[cfg(feature = "trace")]
-        println!(
-            "{}: {} relaying actions payload:",
-            "[ws]".bright_yellow(),
-            "[device_message]".bright_blue()
-        );
+        trace_info_ln!("relaying actions payload");
         #[cfg(feature = "trace")]
-        println!("{}", to_colored_json_auto(&packet).unwrap());
+        trace_json_ln(&packet);
 
         let result = context.ship.lock().await.post(&packet).await;
 
         if result.is_err() {
             // an error here is a big deal. print to holon std out...
-            println!(
-                "[ws]: [device_message] proxy.post call failed. {:?}",
-                result
-            );
+            trace_err_ln!("proxy.post call failed. {:?}", result);
 
             // ...and send error response to connected device over socket
             return;
@@ -360,7 +356,7 @@ async fn on_device_message(my_id: usize, msg: Message, context: &CallContext, de
         let tx = tx.get(&my_id);
         {
             if tx.is_none() {
-                println!("ws: [device_message] error attempting to read device {} from list of connected devices", my_id);
+                trace_err_ln!("ws: [device_message] error attempting to read device {} from list of connected devices", my_id);
                 return;
             }
             let tx = tx.unwrap();
@@ -409,8 +405,8 @@ async fn find_device_tx(
 async fn on_ship_message(_my_id: usize, msg: JsonValue, devices: &Devices) {
     let data = serde_json::from_value::<ShipResponse>(msg.clone());
     if data.is_err() {
-        println!(
-            "ws: [on_ship_message] error deserializing ship event => {:?}",
+        trace_err_ln!(
+            "error deserializing ship event => {:?}",
             serde_json::to_string_pretty(&msg)
         );
         return;
@@ -423,7 +419,7 @@ async fn on_ship_message(_my_id: usize, msg: JsonValue, devices: &Devices) {
     let entry = find_msg_entry(data.id).await;
 
     if entry.is_none() {
-        println!("ws: [on_ship_message] message {} not found", data.id);
+        trace_err_ln!("message {} not found", data.id);
         return;
     }
 
@@ -431,7 +427,7 @@ async fn on_ship_message(_my_id: usize, msg: JsonValue, devices: &Devices) {
     let tx = find_device_tx(entry.device_id, devices).await;
 
     if tx.is_none() {
-        println!("ws: [on_ship_message] device {} not found", entry.device_id);
+        trace_err_ln!("device {} not found", entry.device_id);
     }
 
     // override the outgoing message's id field with the original message id
@@ -440,7 +436,7 @@ async fn on_ship_message(_my_id: usize, msg: JsonValue, devices: &Devices) {
     let result = serde_json::to_string::<ShipResponse>(&data);
 
     if result.is_err() {
-        println!("ws: [on_ship_message] error serializing message {:?}", data);
+        trace_err_ln!("error serializing message {:?}", data);
     }
 
     let tx = tx.unwrap();
@@ -452,20 +448,20 @@ async fn on_ship_message(_my_id: usize, msg: JsonValue, devices: &Devices) {
 }
 
 async fn on_device_disconnected(my_id: usize, devices: &Devices) {
-    eprintln!("ws: [on_device_disconnected] removing device {}...", my_id);
+    trace_green_ln!("removing device {}...", my_id);
 
     // stream closed up, so remove from the device list
     devices.write().await.remove(&my_id);
 
     if devices.read().await.len() == 0 {
         #[cfg(feature = "trace")]
-        println!("no more connected devices. stopping ship listener...");
+        trace_warn_ln!("no more connected devices. stopping ship listener...");
 
         // kill the current ship receiver thread
         SHIP_RECEIVER.read().await.as_ref().unwrap().abort();
 
         #[cfg(feature = "trace")]
-        println!("after no more connected devices. stopping ship listener...");
+        trace_warn_ln!("after no more connected devices. stopping ship listener...");
 
         let mut opt = SHIP_RECEIVER.write().await;
         *opt = None;
@@ -474,10 +470,13 @@ async fn on_device_disconnected(my_id: usize, devices: &Devices) {
 
 #[cfg(test)]
 mod tests {
+    // use crate::trace::{ctraceln, trace_jsonln};
     use futures_util::{SinkExt, StreamExt};
     use rand::Rng;
     use serde_json::json;
     use std::sync::atomic::{AtomicUsize, Ordering};
+    use trace::{trace_err_ln, trace_green_ln, trace_info_ln};
+    // use termcolor::Color;
     use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
     use tokio::time::{sleep, Duration};
     use tokio_tungstenite::{
@@ -490,15 +489,15 @@ mod tests {
     #[test]
     // connect to this node's websocket server (for receiving events from a ship)
     fn can_ws_connect() {
-        println!("ws: [test][can_ws_connect] connecting to node websocket...");
+        trace_info_ln!("connecting to node websocket...");
         let mut request = "ws://127.0.0.1:3030/ws".into_client_request().unwrap();
         let headers = request.headers_mut();
         headers.insert("cookie", "urbauth-~ralbes-mislec-lodlev-migdev=0v6.s58oo.vp1c4.e4fg8.peu65.mols9; Path=/; Max-Age=604800".parse().unwrap());
         let (mut socket, _response) = connect(request).unwrap();
         loop {
-            println!("ws: [test][can_ws_connect] waiting for ship events...");
+            trace_info_ln!("waiting for ship events...");
             let msg = socket.read_message().expect("Error reading message");
-            println!("received: {}", msg);
+            trace_info_ln!("received: {}", msg);
         }
     }
 
@@ -516,7 +515,7 @@ mod tests {
         let (tx, mut rx): (UnboundedSender<String>, UnboundedReceiver<String>) =
             unbounded_channel();
 
-        println!("starting writer...");
+        trace_info_ln!("starting writer...");
         // tokio::task::spawn(async move {
         for i in 0..NUM_WS_CONNECTIONS {
             let mut rng: rand::rngs::StdRng = rand::SeedableRng::from_entropy();
@@ -532,7 +531,7 @@ mod tests {
             let tx2 = tx.clone();
 
             tokio::task::spawn(async move {
-                println!("[thread-{}] - write started", i);
+                trace_info_ln!("[thread-{}] - write started", i);
                 // loop {
                 let secs = rng.gen_range(0..10);
                 sleep(Duration::from_secs(secs)).await;
@@ -545,34 +544,34 @@ mod tests {
                   "mark": "helm-hi",
                   "json": format!("test message {}", msg_id)
                 }]);
-                println!("[thread-{}]: sending message...", i); // [thread-{}]: {}", i, msg.to_string());
+                trace_info_ln!("[thread-{}]: sending message...", i); // [thread-{}]: {}", i, msg.to_string());
                 let _ = itx.send(Message::text(msg.to_string())).await;
                 SENT_COUNT.fetch_add(1, Ordering::Relaxed);
                 let _ = tx1.send("".to_string());
                 // }
             });
             tokio::task::spawn(async move {
-                println!("[thread-{}] - read started", i);
+                trace_info_ln!("[thread-{}] - read started", i);
                 loop {
                     let msg = irx.next().await;
                     if msg.is_none() {
-                        println!("[thread-{}]: received message [no data]", i);
+                        trace_err_ln!("[thread-{}]: received message [no data]", i);
                     } else {
                         let msg = msg.unwrap();
 
                         if msg.is_err() {
-                            println!("[thread-{}]: received message [error]", i);
+                            trace_err_ln!("[thread-{}]: received message [error]", i);
                         }
 
                         let msg = msg.unwrap();
 
-                        println!("[thread-{}]: received message {}", i, msg);
+                        trace_info_ln!("[thread-{}]: received message {}", i, msg);
                         let msg = msg.to_string();
 
                         let res = serde_json::from_str::<Vec<super::ShipAction>>(&msg);
 
                         if res.is_err() {
-                            println!(
+                            trace_err_ln!(
                                 "[thread-{}]: received message [error deserializing message]",
                                 i
                             );
@@ -581,7 +580,11 @@ mod tests {
                         let actions = res.unwrap();
 
                         for i in 0..actions.len() {
-                            println!("[thread-{}]: received actions - {:?}", i, actions[i].json);
+                            trace_info_ln!(
+                                "[thread-{}]: received actions - {:?}",
+                                i,
+                                actions[i].json
+                            );
                         }
 
                         RECD_COUNT.fetch_add(1, Ordering::Relaxed);
@@ -591,14 +594,14 @@ mod tests {
             });
         }
 
-        println!("waiting for eof...");
+        trace_info_ln!("waiting for eof...");
         loop {
             let msg = rx.recv().await;
             let sent_count = SENT_COUNT.fetch_add(0, Ordering::Relaxed);
             let recd_count = RECD_COUNT.fetch_add(0, Ordering::Relaxed);
-            println!("waiting for eof [{}, {}]...", sent_count, recd_count);
+            trace_info_ln!("waiting for eof [{}, {}]...", sent_count, recd_count);
             if sent_count == NUM_WS_CONNECTIONS && recd_count == NUM_WS_CONNECTIONS {
-                println!("eot {:?}", msg);
+                trace_green_ln!("eot {:?}", msg);
                 break;
             }
         }

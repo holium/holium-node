@@ -11,6 +11,8 @@ struct DbError;
 impl reject::Reject for InvalidParameter {}
 impl reject::Reject for DbError {}
 
+use trace::trace_err_ln;
+
 // Custom rejection handler that maps rejections into responses.
 async fn handle_rejection(err: Rejection) -> Result<impl Reply, std::convert::Infallible> {
     if err.is_not_found() {
@@ -18,7 +20,7 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, std::convert::In
     } else if let Some(_) = err.find::<InvalidParameter>() {
         Ok(reply::with_status("BAD_REQUEST", StatusCode::BAD_REQUEST))
     } else {
-        eprintln!("unhandled rejection: {:?}", err);
+        trace_err_ln!("unhandled rejection: {:?}", err);
         Ok(reply::with_status(
             "INTERNAL_SERVER_ERROR",
             StatusCode::INTERNAL_SERVER_ERROR,
@@ -54,10 +56,7 @@ pub async fn handle_chat_messages(
     let timestamp = {
         let ts = i64::from_str_radix(&param, 10);
         if ts.is_err() {
-            println!(
-                "chat: [handle_chat_messages] invalid start-ms parameter {}",
-                param
-            );
+            trace_err_ln!("invalid start-ms parameter {}", param);
             return Err(reject::custom(InvalidParameter));
         }
         ts.unwrap()
@@ -65,7 +64,7 @@ pub async fn handle_chat_messages(
     let data = {
         let data = super::data::query_messages(&context.db, timestamp).await;
         if data.is_err() {
-            println!("chat: [handle_chat_messages] query_messages failed");
+            trace_err_ln!("query_messages failed");
             return Err(reject::custom(DbError));
         }
         data.unwrap()
