@@ -11,10 +11,10 @@ use eventsource_threaded::{EventSource, ReceiverSource};
 use crate::error::{Result as UrbitResult, UrbitAPIError};
 use rand::Rng;
 
-use trace::{trace_err_ln, trace_green_ln, trace_info_ln, trace_json_ln, trace_warn_ln};
+use trace::{trace_err_ln, trace_good_ln, trace_info_ln, trace_json_ln, trace_warn_ln};
 
-pub static SUBSCRIPTION_MSG_ID: u64 = u64::MAX - 1;
-// static NEXT_MESSAGE_ID: AtomicU64 = AtomicU64::new(u64::MAX - 1000);
+pub static CHANNEL_OPEN_MSG_ID: u64 = u64::MAX - 1;
+pub static CHANNEL_DELETE_MSG_ID: u64 = u64::MAX - 2;
 
 #[derive(Debug, Clone)]
 pub struct Ship {
@@ -136,7 +136,7 @@ impl Ship {
 
         // Opening channel request json
         let body = json!([{
-                "id": SUBSCRIPTION_MSG_ID,
+                "id": CHANNEL_OPEN_MSG_ID,
                 "action": "poke",
                 "ship": ship_name,
                 "app": "hood",
@@ -186,7 +186,7 @@ impl Ship {
         // the deserialized Event from SSE
         let event = msg.unwrap();
 
-        trace_green_ln!("api: [open_channel] received event:");
+        trace_good_ln!("api: [open_channel] received event:");
 
         let data = serde_json::from_str::<JsonValue>(&event.data);
 
@@ -248,11 +248,7 @@ impl Ship {
             response.unwrap()
         };
 
-        if !(data.is_object()
-            && id == super::api::SUBSCRIPTION_MSG_ID
-            && ok == "ok"
-            && response == "poke")
-        {
+        if !(data.is_object() && id == CHANNEL_OPEN_MSG_ID && ok == "ok" && response == "poke") {
             bail!(
                 "api: [open_channel] failed to valid SSE handshake {}",
                 event.data
@@ -262,11 +258,40 @@ impl Ship {
         self.channel_url.replace(channel_url);
 
         Ok(receiver)
-        // Ok((
-        //     url_structured,
-        //     ship_name.to_string(),
-        //     session_auth.to_string(),
-        // ))
+    }
+
+    pub async fn discard_channel(&mut self) -> Result<()> {
+        let session_auth = self.session_auth.as_ref().unwrap().to_string();
+
+        // Opening channel request json
+        let body = json!([{
+                "id": CHANNEL_DELETE_MSG_ID,
+                "action": "delete",
+        }]);
+
+        // Make the put request to create the channel.
+        let resp = self
+            .send_put_request(
+                self.channel_url.as_ref().clone().unwrap().as_str(),
+                session_auth.as_str(),
+                &body,
+            )
+            .await;
+
+        if resp.is_err() {
+            bail!("ship: [start_listener] failed to delete channel. put request failed.");
+        }
+
+        let resp = resp.unwrap();
+
+        if resp.status().as_u16() != 204 {
+            bail!(
+                "ship: [start_listener] failed to delete channel. {}",
+                resp.status().as_u16()
+            );
+        }
+
+        Ok(())
     }
 
     // Send a put request using the `ShipInterface`
@@ -301,6 +326,8 @@ impl Ship {
         }
 
         let res = res.unwrap();
+
+        trace_info_ln!("{:?}", res);
 
         if res.status().as_u16() != 204 {
             bail!(
@@ -401,7 +428,7 @@ impl Ship {
                     res.status().as_u16()
                 )
             }
-            trace_green_ln!("ship: [post] success {}", payload.to_string());
+            trace_good_ln!("ship: [post] success {}", payload.to_string());
             ()
         };
         Ok(post_result)

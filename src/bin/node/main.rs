@@ -101,6 +101,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("main: [main] error starting ship subscription");
     }
 
+    // TODO: graceful shutdown handling still needed
+    // let context = context.clone();
+    // match signal::ctrl_c().await {
+    //     Ok(()) => {
+    //         println!("terminate command received. killing ship connection...");
+    //         let mut ship = context.ship.lock().await;
+    //         let result = ship.discard_channel().await;
+    //         if result.is_err() {
+    //             trace_err_ln!("error discarding channel")
+    //         } else {
+    //             trace_info_ln!("channel discarded")
+    //         }
+    //     }
+    //     Err(err) => {
+    //         eprintln!("Unable to listen for shutdown signal: {}", err);
+    //         // we also shut down in case of error
+    //     }
+    // }
+
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
     let chat_route = urbit_api::chat::api::chat_router(context.clone());
@@ -126,96 +145,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-// async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//     let opt = HolAPI::from_args();
-
-//     let server_url = format!("127.0.0.1:{}", opt.urbit_port.clone());
-//     wait_for_server(&server_url.parse().expect("Cannot parse url")).await?;
-
-//     let access_code = urbit_api::lens::get_access_code(opt.server_id.clone()).await?;
-
-//     let http_server_url = format!("http://localhost:{}", opt.urbit_port.clone());
-
-//     // set static ship_interface
-//     // let ship: Ship = Ship::new(http_server_url.as_str(), access_code.trim())
-//     //     .await
-//     //     .expect("Could not create ship interface");
-
-//     // let scry_res = ship_interface.scry("docket", "/our", "json").await;
-//     // match scry_res {
-//     //     Ok(_) => println!("test_scry: {}", scry_res.unwrap().to_string()),
-//     //     Err(e) => println!("scry failed: {}", e),
-//     // }
-
-//     // create a new database file (bedrock.sqlite) in the ./src/lib/db/data folder
-//     let db = bedrock_db::db::initialize("bedrock")?;
-
-//     let (sender, receiver) = unbounded_channel::<JsonValue>();
-
-//     // create a call context that is used as a sort of global state for shared instances
-//     let context: CallContext = NodeContext::to_call_context(NodeContext {
-//         db: db,
-//         // ship: ship,
-//         // used to send data from the EventSource (task/thread/loop) to the receiver
-//         sender: sender,
-//         // threaded listener that waits for messages dispatched by the sender thread
-//         //  note: need to wrap in Arc::Mutex since will need a mutable reference from within
-//         //  the leveraging thread (see ws.rs)
-//         receiver: Arc::new(Mutex::new(receiver)),
-//     });
-
-//     //
-//     // start each 'module'
-//     //  panic if any of these fail?
-//     //
-
-//     // start the chat 'module'
-//     // urbit_api::chat::core::start(&context).await?;
-
-//     //
-//     // note:
-//     // if websockets or ship subscription fails, the process should not start
-//     //
-
-//     // setup the websocket 'hub' which listens for new packets from ctx.receiver
-//     //  and transmits the events to all client subscribers to the socket
-//     // let ws_route = urbit_api::ws::start(context.clone());
-
-//     // subscribe to the ship and listen for events/updates
-//     // note: clones of Arc are not "expensive", since they only increase the
-//     // reference count to the underlying data, but do not allocate any new
-//     // memory nor copy values, etc.
-//     // let res = urbit_api::sub::start(context.clone()).await;
-
-//     if res.is_err() {
-//         panic!("main: [main] error starting ship subscription");
-//     }
-
-//     let rooms_route = rooms::api::rooms_route();
-//     let signaling_route = rooms::socket::signaling_route();
-//     let chat_route = urbit_api::chat::api::chat_router(ctx);
-
-//     let proxy = reverse_proxy_filter("".to_string(), http_server_url);
-//     let login_route = warp::path!("~" / "login" / ..).and(reverse_proxy_filter(
-//         "".to_string(),
-//         format!("http://localhost:{}/~/login/", opt.urbit_port.clone()),
-//     ));
-
-//     let routes = rooms_route
-//         .or(signaling_route)
-//         // .or(ws_route)
-//         .or(chat_route)
-//         .or(login_route);
-
-//     let routes = ws_route
-//         .or(routes)
-//         .or(check_cookie(ship_interface).and(proxy))
-//         .recover(handle_unauthorized)
-//         .recover(handle_rejection);
-//     warp::serve(routes).run(([0, 0, 0, 0], opt.node_port)).await;
-
-//     Ok(())
-// }
 
 #[derive(Debug)]
 struct Unauthorized;

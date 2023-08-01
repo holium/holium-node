@@ -169,13 +169,30 @@ macro_rules! function {
 }
 
 #[macro_export]
-macro_rules! trace_green_ln {
+macro_rules! trace_good {
+      ($($arg:tt)*) => {{
+        #[cfg(feature = "trace")]
+        trace::trace(file!(), module_path!(), line!(), column!(),
+         trace::function!(), Some(termcolor::Color::Green), format!("{}", std::format_args!($($arg)*)).as_str())
+      }};
+    }
+
+#[macro_export]
+macro_rules! trace_good_ln {
       ($($arg:tt)*) => {{
         #[cfg(feature = "trace")]
         trace::traceln(file!(), module_path!(), line!(), column!(),
          trace::function!(), Some(termcolor::Color::Green), format!("{}", std::format_args!($($arg)*)).as_str())
       }};
     }
+
+#[macro_export]
+macro_rules! trace_warn {
+  ($($arg:tt)*) => {{
+    trace::etrace(file!(), module_path!(), line!(), column!(),
+     trace::function!(), Some(termcolor::Color::Yellow), format!("{}", std::format_args!($($arg)*)).as_str())
+  }};
+}
 
 #[macro_export]
 macro_rules! trace_warn_ln {
@@ -186,10 +203,27 @@ macro_rules! trace_warn_ln {
 }
 
 #[macro_export]
+macro_rules! trace_err {
+  ($($arg:tt)*) => {{
+    trace::etrace(file!(), module_path!(), line!(), column!(),
+      trace::function!(), Some(termcolor::Color::Red), format!("{}", std::format_args!($($arg)*)).as_str())
+  }};
+}
+
+#[macro_export]
 macro_rules! trace_err_ln {
   ($($arg:tt)*) => {{
     trace::etraceln(file!(), module_path!(), line!(), column!(),
       trace::function!(), Some(termcolor::Color::Red), format!("{}", std::format_args!($($arg)*)).as_str())
+  }};
+}
+
+#[macro_export]
+macro_rules! trace_info {
+  ($($arg:tt)*) => {{
+    #[cfg(feature = "trace")]
+    trace::trace(file!(), module_path!(), line!(), column!(),
+      trace::function!(), None, format!("{}", std::format_args!($($arg)*)).as_str())
   }};
 }
 

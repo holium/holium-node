@@ -74,6 +74,18 @@ https://developers.urbit.org/reference/arvo/eyre/external-api-ref
 
 holon supports interactions and features outside of Urbit.
 
-```json
-{}
+**Rules**
+
+note: one of the design goals is for the client side to be seamless when working with either a holon or urbit backend
+
+1. if the json is an array, it's considered an Urbit actions payload (see Urbit section above). this adheres to our design goal of a seamless experience for client side; holon must be able to handle urbit payloads "as is".
+
+note: if you need to send arrays into holon as a non-urbit payload. send the array as a field of the "root" object, e.g.:
+
+```jsonc
+{
+  "payload": [{}]
+}
 ```
+
+**note:** at the time of writing, non-urbit payloads are simply echo'd back to the device until use-cases for non-urbit payloads are defined and implemented.

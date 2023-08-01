@@ -10,6 +10,7 @@ default-run = "holon"
 [workspace]
 
 [dependencies]
+ctrlc = "3.4.0"
 bedrock-db = { path = "./src/lib/db" }
 # holon-log = { path = "./src/lib/log" }
 rooms = { path = "./src/lib/rooms" }

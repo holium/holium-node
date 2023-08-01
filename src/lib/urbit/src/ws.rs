@@ -16,7 +16,7 @@ use warp::Filter;
 
 use crate::context::CallContext;
 
-use trace::{trace_err_ln, trace_green_ln, trace_info_ln, trace_json_ln, trace_warn_ln};
+use trace::{trace_err_ln, trace_good_ln, trace_info_ln, trace_json_ln, trace_warn_ln};
 
 /// global unique device id counter.
 static NEXT_DEVICE_ID: AtomicUsize = AtomicUsize::new(1);
@@ -186,7 +186,7 @@ async fn device_connected(
     // use a counter to assign a new unique ID for this device.
     let my_id = NEXT_DEVICE_ID.fetch_add(1, Ordering::Relaxed);
 
-    trace_green_ln!("new chat user: {}", my_id);
+    trace_good_ln!("new chat user: {}", my_id);
 
     // Split the socket into a sender and receive of messages.
     let (mut device_ws_tx, mut device_ws_rx) = ws.split();
@@ -441,7 +441,7 @@ async fn on_ship_message(_my_id: usize, msg: JsonValue, devices: &Devices) {
 }
 
 async fn on_device_disconnected(my_id: usize, devices: &Devices) {
-    trace_green_ln!("removing device {}...", my_id);
+    trace_good_ln!("removing device {}...", my_id);
 
     // stream closed up, so remove from the device list
     devices.write().await.remove(&my_id);
@@ -466,7 +466,7 @@ mod tests {
     use rand::Rng;
     use serde_json::json;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use trace::{trace_err_ln, trace_green_ln, trace_info_ln};
+    use trace::{trace_err_ln, trace_good_ln, trace_info_ln};
     // use termcolor::Color;
     use tokio::sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender};
     use tokio::time::{sleep, Duration};
@@ -592,7 +592,7 @@ mod tests {
             let recd_count = RECD_COUNT.fetch_add(0, Ordering::Relaxed);
             trace_info_ln!("waiting for eof [{}, {}]...", sent_count, recd_count);
             if sent_count == NUM_WS_CONNECTIONS && recd_count == NUM_WS_CONNECTIONS {
-                trace_green_ln!("eot {:?}", msg);
+                trace_good_ln!("eot {:?}", msg);
                 break;
             }
         }
