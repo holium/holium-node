@@ -9,7 +9,7 @@ use warp::ws::{Message, WebSocket};
 use warp::Filter;
 use warp_real_ip::get_forwarded_for;
 
-use crate::types::{Peer, PeerId, PeerIp, Room, PEER_MAP, ROOM_MAP};
+use crate::types::{Peer, PeerId, PeerIp, Room, RoomType, PEER_MAP, ROOM_MAP};
 
 pub fn signaling_route(
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
@@ -46,6 +46,7 @@ pub async fn handle_signaling(ws: WebSocket, peer_ip: PeerIp, peer_id: String) {
         peer_id.clone(),
         peer_ip
     );
+
     let (mut ws_sender, mut ws_receiver) = ws.split();
     let (sender, receiver) = mpsc::unbounded_channel();
     let mut receiver = UnboundedReceiverStream::new(receiver);
@@ -91,6 +92,7 @@ pub async fn handle_message(
         "create-room" => {
             println!("{} - create-room - {}", peer_id, peer_ip);
             let rid = message["rid"].as_str().unwrap().to_string();
+            let rtype = message["rtype"].as_str().unwrap().to_string();
             let title = message["title"].as_str().unwrap().to_string();
 
             // path is optional
@@ -101,6 +103,7 @@ pub async fn handle_message(
 
             let new_room = Room {
                 rid: rid,
+                rtype: rtype,
                 title: title,
                 creator: peer_id.clone(),
                 provider: "default".to_string(),
@@ -225,12 +228,58 @@ pub async fn handle_message(
             };
 
             let mut room = room.write().unwrap();
+
+            // enforce the following rules:
+            //  #) user can simultaneously be in an interactive room AND a background room; however...
+            //  #) user can only be in one interactive room at a time
+            //  #) user can only be in one background room at a time
+            let peers = PEER_MAP.read().unwrap();
+            let peer = peers.get(peer_id).unwrap();
+
+            {
+                let rooms = peer.2.rooms.read();
+                let rooms = rooms.unwrap();
+                // if the user is already in an interactive session, do not allow in
+                if room.rtype == RoomType::Interactive.as_str() && rooms[0].is_some() {
+                    println!("{} already in interactive room", peer_id);
+                    // todo: error handling?
+                    // let message = json!({
+                    //     "type": "error",
+                    //     "rid": rid.clone(),
+                    //     "peer_id": peer_id.clone(),
+                    //     "message": "only one active interactive room session per pier allowed",
+                    // });
+                    // peer.1.send(Message::text(message.to_string())).unwrap();
+                    return;
+                }
+
+                // if the user is already in an interactive session, do not allow in
+                if room.rtype == RoomType::Background.as_str() && rooms[1].is_some() {
+                    println!("{} already in background room", peer_id);
+                    return;
+                }
+            }
+
             if room.present.contains(peer_id) {
                 println!("{} already in room", peer_id);
                 return;
             }
 
             room.present.push(peer_id.clone());
+
+            let mut slot: i8 = -1;
+            // if the user is already in an interactive session, do not allow in
+            if room.rtype.as_str() == RoomType::Interactive.as_str() {
+                slot = 0;
+            } else if room.rtype.as_str() == RoomType::Background.as_str() {
+                slot = 1;
+            }
+
+            if slot != -1 {
+                let rooms = peer.2.rooms.write();
+                let mut rooms = rooms.unwrap();
+                rooms[slot as usize].replace(());
+            }
 
             // Create the message
             let message = json!({
@@ -241,7 +290,7 @@ pub async fn handle_message(
             });
 
             // send update to all known peers
-            let peers = PEER_MAP.read().unwrap();
+            // let peers = PEER_MAP.read().unwrap();
             for (_, (_, sender, _)) in peers.iter() {
                 sender.send(Message::text(message.to_string())).unwrap()
             }
@@ -331,6 +380,8 @@ pub async fn handle_message(
                     sender.clone(),
                     Peer {
                         id: peer_id.clone(),
+                        // no active background or interactive session by default
+                        rooms: Arc::new(RwLock::new([None, None])),
                     },
                 ),
             );

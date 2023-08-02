@@ -1733,9 +1733,11 @@ dependencies = [
  "reqwest 0.11.18",
  "serde",
  "serde_json",
+ "termcolor",
  "thiserror",
  "tokio 1.28.2",
  "tokio-stream",
+ "trace",
  "warp",
  "warp-real-ip",
 ]

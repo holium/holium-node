@@ -14,7 +14,7 @@ impl reject::Reject for DbError {}
 use trace::trace_err_ln;
 
 // Custom rejection handler that maps rejections into responses.
-async fn handle_rejection(err: Rejection) -> Result<impl Reply, std::convert::Infallible> {
+async fn _handle_rejection(err: Rejection) -> Result<impl Reply, std::convert::Infallible> {
     if err.is_not_found() {
         Ok(reply::with_status("NOT_FOUND", StatusCode::NOT_FOUND))
     } else if let Some(_) = err.find::<InvalidParameter>() {
@@ -43,8 +43,8 @@ pub fn chat_router(
         .and(with_context(ctx))
         .and_then(|param: String, context: CallContext| async {
             handle_chat_messages(context, param).await
-        })
-        .recover(handle_rejection);
+        });
+    // .recover(handle_rejection);
 
     chat_routes.with(cors)
 }

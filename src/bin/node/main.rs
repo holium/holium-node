@@ -132,15 +132,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let routes = rooms_route
         .or(signaling_route)
-        // .or(ws_route)
         .or(chat_route)
-        .or(login_route);
-
-    let routes = ws_route
-        .or(routes)
+        .or(ws_route)
+        .or(login_route)
         .or(check_cookie(context).and(proxy))
         .recover(handle_unauthorized)
         .recover(handle_rejection);
+
     warp::serve(routes).run(([0, 0, 0, 0], opt.node_port)).await;
 
     Ok(())
