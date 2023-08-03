@@ -12,6 +12,7 @@ default-run = "holon"
 [dependencies]
 bedrock-db = { path = "./src/lib/db" }
 rooms = { path = "./src/lib/rooms" }
+passport = { path = "./src/lib/passport" }
 urbit-api = { path = "./src/lib/urbit" }
 bytes = "1.0"
 event-listener-primitives = "2.0.1"

@@ -1,0 +1,15 @@
+[package]
+name = "passport"
+version = "0.1.0"
+description = "Enable friends discovery for new Realm users."
+authors = ["Trent Gillham <6413077+drunkplato@users.noreply.github.com>"]
+edition = "2021"
+
+[dependencies]
+bedrock-db = { path = "../db" }
+warp = "0.3.5"
+serde = "1.0.163"
+serde_json = "1.0.96"
+chrono = { version = "0.4.26", features = ["serde"] }
+reqwest = { version = "0.11", features = ["json"] }
+tokio = { version = "1", features = ["full"] }

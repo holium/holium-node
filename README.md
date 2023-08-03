@@ -1,4 +1,5 @@
 # Holon
+
 A P2P node that wraps Urbit and gives it scalable properties.
 
 ## Getting started
@@ -20,11 +21,13 @@ rustup update
 ### 2. Install tmux
 
 On mac:
+
 ```zsh
 brew install tmux
 ```
 
 On linux:
+
 ```zsh
 sudo apt-get install tmux
 ```
@@ -32,37 +35,62 @@ sudo apt-get install tmux
 ### 2. Build the project with cargo
 
 Build for dev:
+
 ```zsh
 cargo build
 cargo run
 ```
 
 Build for production:
+
 ```zsh
 cargo build --release
 ```
 
+Hot reloading:
+
+```zsh
+# install cargo watch
+cargo install cargo-watch
+
+# observe changes and re-run command with each new build
+cargo watch -x run
+# or
+cargo watch -x 'run zod stop' -x 'run zod start'
+```
+
+See [Cargo Watch](https://crates.io/crates/cargo-watch) docs for more complex use.
+
 ### 3. Running the node
 
-The below command will print the debug cli
 ```zsh
-cargo run 
+# Print debug CLI
+cargo run
+# boot your first fakeship
+cargo run zod boot --fake
 ```
 
 ## tmux guide
 
 ### Listing sessions
 
-
 ### Attaching to sessions
+
 ```zsh
+# attach to dojo session
 tmux attach-session -t zod
-``` 
+# attach to node session
+tmux attach-session -t zod-api
+```
 
 ### Detaching while in a session
 
 Ctrl + B, let go, then D
 
+### Scrolling in a session
+
+Ctrl + B, let go, then left bracket ([).
+To exit scrolling, press Esc.
 
 ## Running in production
 
