@@ -8,3 +8,6 @@ hol-urbit
 ships
 hol.pid
 node_modules
+
+**/.DS_Store
+**/lib/db/data
