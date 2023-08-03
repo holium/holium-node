@@ -15,7 +15,7 @@ use crossbeam::channel::unbounded;
 // use tokio::time::{sleep, Duration};
 
 use structopt::StructOpt;
-use trace::{trace_err_ln, trace_info_ln};
+use trace::{trace_err_ln, trace_good_ln, trace_info_ln};
 use urbit_api::api::Ship;
 
 use warp_reverse_proxy::reverse_proxy_filter;
@@ -31,7 +31,8 @@ pub struct HolAPI {
 
     /// the identity of the instance
     #[structopt()]
-    server_id: String,
+    pub server_id: String,
+
     /// http-port for Urbit instance
     #[structopt(short = "p", long = "urbit-port", default_value = "9030")]
     pub urbit_port: u16,
@@ -39,6 +40,10 @@ pub struct HolAPI {
     // the port for the Holium node
     #[structopt(long = "node-port", default_value = "3030")]
     pub node_port: u16,
+
+    // ship code
+    #[structopt(short = "code", long = "ship-code", default_value = "")]
+    pub code: String,
 }
 
 #[tokio::main]
@@ -48,11 +53,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_url = format!("127.0.0.1:{}", opt.urbit_port.clone());
     wait_for_server(&server_url.parse().expect("Cannot parse url")).await?;
 
-    let access_code = urbit_api::lens::get_access_code(opt.server_id.clone()).await?;
+    // let access_code = urbit_api::lens::get_access_code(opt.server_id.clone()).await?;
+    // let access_code = opt.code;
+    trace_good_ln!("initializing server {}...", opt.server_id);
 
     let http_server_url = format!("http://localhost:{}", opt.urbit_port.clone());
 
-    let mut ship = Ship::new(http_server_url.as_str(), access_code.trim()).await?;
+    let mut ship = Ship::new(http_server_url.as_str(), opt.code.trim()).await?;
 
     let _ = ship.scry("docket", "/our", "json").await?;
 
