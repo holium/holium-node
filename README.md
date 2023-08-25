@@ -1,4 +1,5 @@
 # Holon
+
 A P2P node that wraps Urbit and gives it scalable properties.
 
 ## Getting started
@@ -20,11 +21,13 @@ rustup update
 ### 2. Install tmux
 
 On mac:
+
 ```zsh
 brew install tmux
 ```
 
 On linux:
+
 ```zsh
 sudo apt-get install tmux
 ```
@@ -32,12 +35,14 @@ sudo apt-get install tmux
 ### 2. Build the project with cargo
 
 Build for dev:
+
 ```zsh
 cargo build
 cargo run
 ```
 
 Build for production:
+
 ```zsh
 cargo build --release
 ```
@@ -45,24 +50,30 @@ cargo build --release
 ### 3. Running the node
 
 The below command will print the debug cli
+
 ```zsh
-cargo run 
+cargo run
 ```
 
 ## tmux guide
 
 ### Listing sessions
 
-
 ### Attaching to sessions
+
 ```zsh
 tmux attach-session -t zod
-``` 
+```
+
+### Attaching to the test environment
+
+```zsh
+tmux attach-session -t node-test
+```
 
 ### Detaching while in a session
 
 Ctrl + B, let go, then D
-
 
 ## Running in production
 
@@ -141,6 +152,12 @@ node-0.holium.live {
         reverse_proxy localhost:3030
 }
 
+# the holium node test environment
+node-test.holium.live {
+        tls info@holium.com
+        reverse_proxy localhost:3031
+}
+
 # Refer to the Caddy docs for more information:
 # https://caddyserver.com/docs/caddyfile
 ```
@@ -158,3 +175,17 @@ cargo build --release
 ln -s /target/release/holon holon
 ln -s /target/release/node node
 ```
+
+## Digital Ocean
+
+In order to manage the holium node, you need acces to the Holium Team in Digital Ocean.
+
+For access, please email trent@holium.com for assistance.
+
+Once in the team space, the test Holium node can be found here:
+
+Manage -> Droplets -> holium-node-test
+
+IP: 178.128.135.130
+
+For access to the Droplet console (or SSH access), please email trent@holium.com for assistance.

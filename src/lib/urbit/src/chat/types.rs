@@ -32,6 +32,7 @@ pub struct ReplyTo {
 //     ]
 //   }
 // }
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct ChatMessage {
     #[serde(rename = "msg-id")]

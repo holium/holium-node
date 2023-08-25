@@ -4,11 +4,11 @@ use serde_json::Value as JsonValue;
 use std::io::Write;
 use termcolor::{BufferWriter, Color, ColorChoice, ColorSpec, WriteColor};
 
-pub fn trace_json(value: &JsonValue) {
+pub fn fn_trace_json(value: &JsonValue) {
     print!("{}", to_colored_json_auto(value).unwrap());
 }
 
-pub fn trace_json_ln(value: &JsonValue) {
+pub fn fn_trace_json_ln(value: &JsonValue) {
     println!("{}", to_colored_json_auto(value).unwrap());
 }
 
@@ -16,7 +16,7 @@ pub fn trace_json_ln(value: &JsonValue) {
 macro_rules! trace_json_ln {
     ($json:expr) => {{
         #[cfg(feature = "trace")]
-        trace::trace_json_ln($json);
+        trace::fn_trace_json_ln($json);
     }};
 }
 
@@ -24,7 +24,7 @@ macro_rules! trace_json_ln {
 macro_rules! trace_json {
     ($json:expr) => {{
         #[cfg(feature = "trace")]
-        trace::trace_json($json);
+        trace::fn_trace_json($json);
     }};
 }
 

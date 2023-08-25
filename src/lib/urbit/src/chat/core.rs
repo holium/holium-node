@@ -6,7 +6,7 @@ use crate::context::CallContext;
 use anyhow::{bail, Result};
 
 use super::types::ChatTables;
-use trace::trace_info_ln;
+use trace::{trace_err_ln, trace_info_ln};
 
 pub async fn generate_schema(ctx: &CallContext) -> Result<()> {
     // run thru all the sql files in the migrations folder in numerical
@@ -34,6 +34,7 @@ pub async fn generate_schema(ctx: &CallContext) -> Result<()> {
 }
 
 pub async fn import_data(ctx: &CallContext) -> Result<()> {
+    trace_info_ln!("importing data...");
     // grab a connection from the connection pool
     let conn = ctx.db.pool.get_conn()?;
 
@@ -56,9 +57,16 @@ pub async fn import_data(ctx: &CallContext) -> Result<()> {
         )
         .await?;
 
-    // println!("deserializing chat messages retrieved from ship...");
+    trace_info_ln!("deserializing chat messages retrieved from ship...");
 
-    let root: ChatTables = serde_json::from_value(response)?;
+    let root = serde_json::from_value(response);
+
+    if root.is_err() {
+        trace_err_ln!("error deserializing chat messages: {:?}", root.unwrap_err());
+        return Ok(());
+    }
+
+    let root: ChatTables = root.unwrap();
 
     trace_info_ln!("processing chat messages...");
 
@@ -69,7 +77,7 @@ pub async fn import_data(ctx: &CallContext) -> Result<()> {
     }
 
     for msg in root.tables.messages {
-        // println!("processing chat message: {:?}", msg);
+        println!("processing chat message: {:?}", msg.msg_id);
         let mut stmt = conn.prepare(
             "REPLACE INTO chat_messages (
                     path,
