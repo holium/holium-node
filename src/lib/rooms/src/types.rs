@@ -38,7 +38,7 @@ impl RoomType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Peer {
     pub id: PeerId,
-    pub rooms: Arc<RwLock<[Option<()>; 2]>>,
+    // pub rooms: Arc<RwLock<[Option<()>; 2]>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

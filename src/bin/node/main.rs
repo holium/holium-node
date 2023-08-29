@@ -108,24 +108,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         panic!("main: [main] error starting ship subscription");
     }
 
-    // TODO: graceful shutdown handling still needed
-    // let context = context.clone();
-    // match signal::ctrl_c().await {
-    //     Ok(()) => {
-    //         println!("terminate command received. killing ship connection...");
-    //         let mut ship = context.ship.lock().await;
-    //         let result = ship.discard_channel().await;
-    //         if result.is_err() {
-    //             trace_err_ln!("error discarding channel")
-    //         } else {
-    //             trace_info_ln!("channel discarded")
-    //         }
-    //     }
-    //     Err(err) => {
-    //         eprintln!("Unable to listen for shutdown signal: {}", err);
-    //         // we also shut down in case of error
-    //     }
-    // }
+    // setup_ctrlc_handler(&context).await?;
 
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
