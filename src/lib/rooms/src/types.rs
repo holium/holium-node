@@ -1,6 +1,6 @@
 use lazy_static::lazy_static;
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::HashMap,
     sync::{Arc, RwLock},
 };
 
@@ -9,23 +9,45 @@ use tokio::sync::mpsc::UnboundedSender;
 use warp::ws::Message;
 
 pub type PeerId = String;
+pub type DeviceId = String;
 pub type PeerIp = String;
 pub type Rid = String;
 
-pub type PeerInfo = (PeerIp, UnboundedSender<Message>, Peer);
-pub type Peers = HashMap<PeerId, PeerInfo>;
+// 4th element:
+// minimal data structure to enforce rule that user only be allowed
+// in one 'interactive' and/or one 'background' session at a time
+// slot 0 is reserved for the current 'interactive' session (if exists)
+// slot 1 is reserved for the current 'background' session (if exists)
+pub type DeviceInfo = (PeerIp, UnboundedSender<Message>, Peer);
+// pub type Peers = HashMap<PeerId, PeerInfo>;
 
-pub type PeerMap = Arc<RwLock<Peers>>;
-pub type PeerIds = Arc<RwLock<VecDeque<PeerId>>>;
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum RoomType {
+    Background,
+    Interactive,
+}
+
+impl RoomType {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            RoomType::Background => "background",
+            RoomType::Interactive => "interactive",
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Peer {
     pub id: PeerId,
+    // pub rooms: Arc<RwLock<[Option<()>; 2]>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Room {
     pub rid: String,
+    // room type:
+    //  "interactive" | "background"
+    pub rtype: String,
     pub title: String,
     pub creator: String,
     pub provider: String,
@@ -37,12 +59,17 @@ pub struct Room {
 }
 pub type RoomLock = Arc<RwLock<Room>>;
 
-pub type RoomTuple = (PeerMap, RoomLock);
-
 lazy_static! {
     // pub static ref ROOM_MAP: RwLock<HashMap<Rid, RoomTuple>> = RwLock::new(HashMap::new());
     pub static ref ROOM_MAP: RwLock<HashMap<Rid, RoomLock>> = RwLock::new(HashMap::new());
-    pub static ref PEER_MAP: RwLock<HashMap<PeerId, PeerInfo>> = RwLock::new(HashMap::new());
+    // @patrick - thought about creating a unique string key of "peer_id:peer_ip"; however
+    //  sending messages back out requires string parsing and loops to determine all the sockets to send on.
+    //  a map of devices should be more efficient since lookups will be faster.
+    // also .. choosing to use a Vector of devices instead of a map since it is possible for multiple realm
+    //   electron clients (running on the same device) to have the same IP address.
+    // we can either force devs to come up with a truly unique device ID (will be difficult to be 100% fool proof
+    //   for electron clients), or simply allow the same IP to connect multiple times (if needed)
+    pub static ref PEER_MAP: RwLock<HashMap<PeerId, HashMap<DeviceId, DeviceInfo>>> = RwLock::new(HashMap::new());
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

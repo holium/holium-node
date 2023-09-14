@@ -1,19 +1,29 @@
 mod helpers;
 
 use std::convert::Infallible;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use serde_derive::Serialize;
-use serde_json::Value;
+use serde_json::Value as JsonValue;
 use warp::http::uri::PathAndQuery;
 use warp::http::StatusCode;
 use warp::{http::Uri, reject, Filter, Rejection, Reply};
 
+// use tokio::sync::mpsc::unbounded_channel;
+use crossbeam::channel::unbounded;
+// use tokio::time::{sleep, Duration};
+
 use structopt::StructOpt;
-use urbit_api::SafeShipInterface;
+use trace::{trace_err_ln, trace_good_ln, trace_info_ln};
+use urbit_api::api::Ship;
 
 use warp_reverse_proxy::reverse_proxy_filter;
 
 use crate::helpers::wait_for_server;
+
+use urbit_api::context::{CallContext, NodeContext};
+use urbit_api::db::Db;
 
 #[derive(StructOpt)]
 pub struct HolAPI {
@@ -21,7 +31,8 @@ pub struct HolAPI {
 
     /// the identity of the instance
     #[structopt()]
-    server_id: String,
+    pub server_id: String,
+
     /// http-port for Urbit instance
     #[structopt(short = "p", long = "urbit-port", default_value = "9030")]
     pub urbit_port: u16,
@@ -29,6 +40,10 @@ pub struct HolAPI {
     // the port for the Holium node
     #[structopt(long = "node-port", default_value = "3030")]
     pub node_port: u16,
+
+    // ship code
+    #[structopt(short = "code", long = "ship-code", default_value = "")]
+    pub code: String,
 }
 
 #[tokio::main]
@@ -38,24 +53,66 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let server_url = format!("127.0.0.1:{}", opt.urbit_port.clone());
     wait_for_server(&server_url.parse().expect("Cannot parse url")).await?;
 
-    let access_code = urbit_api::lens::get_access_code(opt.server_id.clone()).await?;
+    // let access_code = urbit_api::lens::get_access_code(opt.server_id.clone()).await?;
+    // let access_code = opt.code;
+    trace_good_ln!("initializing server {}...", opt.server_id);
 
     let http_server_url = format!("http://localhost:{}", opt.urbit_port.clone());
 
-    // set static ship_interface
-    let ship_interface: SafeShipInterface =
-        SafeShipInterface::new(http_server_url.as_str(), access_code.trim())
-            .await
-            .expect("Could not create ship interface");
+    let mut ship = Ship::new(http_server_url.as_str(), opt.code.trim()).await?;
 
-    let scry_res = ship_interface.scry("docket", "/our", "json").await;
-    match scry_res {
-        Ok(_) => println!("test_scry: {}", scry_res.unwrap().to_string()),
-        Err(e) => println!("scry failed: {}", e),
+    let _ = ship.scry("docket", "/our", "json").await?;
+
+    // create a new database file (bedrock.sqlite) in the ./src/lib/db/data folder
+    let db_pool = bedrock_db::initialize_pool("bedrock")?;
+
+    let (sender, receiver) = unbounded::<JsonValue>();
+
+    // create a call context that is used as a sort of global state for shared instances
+    let context: CallContext = NodeContext::to_call_context(NodeContext {
+        db: Db { pool: db_pool },
+        ship: Arc::new(Mutex::new(ship)),
+        // used to send data from the EventSource (task/thread/loop) to the receiver
+        sender: sender,
+        // threaded listener that waits for messages dispatched by the sender thread
+        //  note: need to wrap in Arc::Mutex since will need a mutable reference from within
+        //  the leveraging thread (see ws.rs)
+        // receiver: Arc::new(Mutex::new(receiver)),
+        receiver: receiver,
+    });
+
+    //
+    // start each 'module'
+    //  panic if any of these fail?
+    //
+
+    // start the chat 'module'
+    urbit_api::chat::core::start(&context).await?;
+
+    //
+    // note:
+    // if websockets or ship subscription fails, the process should not start
+    //
+
+    // setup the websocket 'hub' which listens for new packets from ctx.receiver
+    //  and transmits the events to all client subscribers to the socket
+    let ws_route = urbit_api::ws::start(context.clone()).await;
+
+    // subscribe to the ship and listen for events/updates
+    // note: clones of Arc are not "expensive", since they only increase the
+    // reference count to the underlying data, but do not allocate any new
+    // memory nor copy values, etc.
+    let res = urbit_api::sub::start(context.clone()).await;
+
+    if res.is_err() {
+        panic!("main: [main] error starting ship subscription");
     }
+
+    // setup_ctrlc_handler(&context).await?;
 
     let rooms_route = rooms::api::rooms_route();
     let signaling_route = rooms::socket::signaling_route();
+    let chat_route = urbit_api::chat::api::chat_router(context.clone());
 
     let proxy = reverse_proxy_filter("".to_string(), http_server_url);
     let login_route = warp::path!("~" / "login" / ..).and(reverse_proxy_filter(
@@ -63,10 +120,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         format!("http://localhost:{}/~/login/", opt.urbit_port.clone()),
     ));
 
-    let routes = rooms_route.or(signaling_route).or(login_route);
-
-    let routes = routes
-        .or(check_cookie(ship_interface).and(proxy))
+    let routes = rooms_route
+        .or(signaling_route)
+        .or(chat_route)
+        .or(ws_route)
+        .or(login_route)
+        .or(check_cookie(context).and(proxy))
         .recover(handle_unauthorized)
         .recover(handle_rejection);
 
@@ -100,8 +159,8 @@ struct ErrorMessage {
 }
 
 async fn handle_unauthorized(reject: Rejection) -> Result<impl Reply, Rejection> {
-    if cfg!(feature = "debug_log") {
-        println!("handle_unauthorized: {:?}", reject);
+    if cfg!(feature = "trace") {
+        trace_info_ln!("handle_unauthorized: {:?}", reject);
     }
 
     if reject.is_not_found() {
@@ -117,7 +176,7 @@ async fn handle_unauthorized(reject: Rejection) -> Result<impl Reply, Rejection>
 }
 
 async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
-    if cfg!(feature = "debug_log") {
+    if cfg!(feature = "trace") {
         println!("handle_rejection: {:?}", err);
     }
 
@@ -132,7 +191,7 @@ async fn handle_rejection(err: Rejection) -> Result<impl Reply, Infallible> {
         message = "FORBIDDEN";
     } else {
         // We should have expected this... Just log and say its a 500
-        eprintln!("unhandled rejection: {:?}", err);
+        trace_err_ln!("unhandled rejection: {:?}", err);
         code = StatusCode::INTERNAL_SERVER_ERROR;
         message = "INTERNAL_SERVER_ERROR";
     }
@@ -163,7 +222,7 @@ fn reject_on_path(path: &str) -> warp::Rejection {
     }
 }
 
-fn handle_response(path: &str, data: Value) -> Result<(), warp::Rejection> {
+fn handle_response(path: &str, data: JsonValue) -> Result<(), warp::Rejection> {
     let is_valid = data
         .as_object()
         .unwrap()
@@ -172,82 +231,56 @@ fn handle_response(path: &str, data: Value) -> Result<(), warp::Rejection> {
         .as_bool()
         .unwrap();
     if is_valid {
-        if cfg!(feature = "debug_log") {
-            println!("cookie valid {}", path)
+        if cfg!(feature = "trace") {
+            trace_info_ln!("cookie valid {}", path)
         }
         return Ok(());
     } else {
-        if cfg!(feature = "debug_log") {
-            println!("cookie invalid {}", path)
+        if cfg!(feature = "trace") {
+            trace_err_ln!("cookie invalid {}", path)
         }
         return Err(reject_on_path(path));
     }
 }
 
-fn check_cookie(
-    ship_interface: SafeShipInterface,
-) -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
+fn check_cookie(ctx: CallContext) -> impl Filter<Extract = (), Error = warp::Rejection> + Clone {
     warp::any()
         .and(warp::path::full())
-        .and(with_ship_interface(ship_interface))
+        .and(with_call_context(ctx))
         .and(warp::header::headers_cloned())
         .and_then(
             move |path: warp::path::FullPath,
-                  ship_interface: SafeShipInterface,
+                  context: CallContext,
                   headers: reqwest::header::HeaderMap| async move {
                 if !headers.contains_key("Cookie") {
                     return Err(reject_on_path(path.as_str()));
                 }
                 let cookie = headers.get("Cookie").unwrap().to_str().unwrap();
-                if cfg!(feature = "debug_log") {
+                if cfg!(feature = "trace") {
                     println!("path: {}, cookie: {}", path.as_str(), cookie);
                 }
                 let cookie = cookie.split(';').collect::<Vec<&str>>()[0].to_string();
-                let res = ship_interface
+                let res = context
+                    .ship
+                    .lock()
+                    .await
                     .scry(
                         "holon",
                         format!("/valid-cookie/{}", cookie).as_str(),
                         "json",
                     )
                     .await;
-                if res.is_ok() {
-                    return handle_response(path.as_str(), res.unwrap());
-                } else {
-                    match res.err().unwrap() {
-                        urbit_api::error::UrbitAPIError::StatusCode(403) => {
-                            if cfg!(feature = "debug_log") {
-                                println!("|403| refreshing...");
-                            }
-                            let res = ship_interface.refresh().await;
-                            if res.is_err() {
-                                eprintln!("error refreshing!");
-                                return Err(reject::custom(ServerError));
-                            }
-                            let res = ship_interface
-                                .scry(
-                                    "holon",
-                                    format!("/valid-cookie/{}", cookie).as_str(),
-                                    "json",
-                                )
-                                .await;
-                            if res.is_err() {
-                                eprintln!("error scrying after refresh!");
-                                return Err(reject::custom(ServerError));
-                            }
-                            return handle_response(path.as_str(), res.unwrap());
-                        }
-                        _ => {
-                            return Err(reject::custom(ServerError));
-                        }
-                    }
+                if res.is_err() {
+                    return Err(reject::custom(ServerError));
                 }
+                return handle_response(path.as_str(), res.unwrap());
             },
         )
         .untuple_one()
 }
 
-fn with_ship_interface(
-    ship_interface: SafeShipInterface,
-) -> impl Filter<Extract = (SafeShipInterface,), Error = Infallible> + Clone {
-    warp::any().map(move || ship_interface.clone())
+fn with_call_context(
+    context: CallContext,
+) -> impl Filter<Extract = (CallContext,), Error = Infallible> + Clone {
+    warp::any().map(move || context.clone())
 }

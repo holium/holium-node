@@ -49,6 +49,31 @@ impl SafeShipInterface {
         let api = self.api.lock().await;
         api.scry(app, path, mark).await
     }
+
+    pub async fn scry_to_str(&self, app: &str, path: &str, mark: &str) -> Result<String> {
+        let api = self.api.lock().await;
+        api.scry_to_str(app, path, mark).await
+    }
+
+    pub async fn send_put_request(&self, url: &str, body: &Value) -> Result<Response> {
+        let api = self.api.lock().await;
+        api.send_put_request(url, body).await
+    }
+
+    pub async fn get_url(&self) -> String {
+        let api = self.api.lock().await;
+        api.url.clone()
+    }
+
+    pub async fn get_ship_name(&self) -> Option<String> {
+        let api = self.api.lock().await;
+        api.ship_name.clone()
+    }
+
+    pub async fn get_session_auth(&self) -> Option<HeaderValue> {
+        let api = self.api.lock().await;
+        api.session_auth.clone()
+    }
 }
 
 impl ShipInterface {
@@ -142,6 +167,22 @@ impl ShipInterface {
         let result = resp.send().await?;
         if result.status().as_u16() == 200 {
             Ok(result.json::<Value>().await?)
+        } else {
+            Err(UrbitAPIError::StatusCode(result.status().as_u16()))
+        }
+    }
+
+    /// Sends a scry to the ship
+    pub async fn scry_to_str(&self, app: &str, path: &str, mark: &str) -> Result<String> {
+        let scry_url = format!("{}/~/scry/{}{}.{}", self.url, app, path, mark);
+        let resp = self
+            .req_client
+            .get(&scry_url)
+            .header(COOKIE, self.session_auth.clone().unwrap())
+            .header("Content-Type", "application/json");
+        let result = resp.send().await?;
+        if result.status().as_u16() == 200 {
+            Ok(result.text().await?)
         } else {
             Err(UrbitAPIError::StatusCode(result.status().as_u16()))
         }

@@ -6,6 +6,7 @@ authors = ["Trent Gillham <6413077+drunkplato@users.noreply.github.com>"]
 edition = "2021"
 
 [dependencies]
+trace = { path = "../trace" }
 eventsource-threaded = "0.1.0"
 reqwest = { version = "0.11.18", features = ["blocking"] }
 thiserror = "1.0.40"
@@ -16,7 +17,13 @@ warp = "0.3.5"
 anyhow = "1.0.71"
 serde_json = "1.0.96"
 lazy_static = "1.4.0"
+termcolor = "1.2.0"
 tokio = "1.28.1"
 futures-util = "0.3.28"
 tokio-stream = "0.1.14"
 warp-real-ip = "0.2.0"
+
+[features]
+# no features by default
+default = []
+trace = []

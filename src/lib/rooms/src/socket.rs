@@ -9,48 +9,96 @@ use warp::ws::{Message, WebSocket};
 use warp::Filter;
 use warp_real_ip::get_forwarded_for;
 
-use crate::types::{Peer, PeerId, PeerIp, Room, PEER_MAP, ROOM_MAP};
+use trace::{trace_err_ln, trace_info_ln, trace_json_ln};
+
+use crate::types::{DeviceId, Peer, PeerId, PeerIp, Room, PEER_MAP, ROOM_MAP};
+
+// InvalidArgs is the rejection that is raised when the serverId and/or deviceId
+//   arguments are missing from the url query string
+#[derive(Debug)]
+struct InvalidArgs;
+impl warp::reject::Reject for InvalidArgs {}
 
 pub fn signaling_route(
 ) -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone {
     let signaling = warp::path("signaling")
+        .and(warp::header("user-agent"))
+        .and(warp::query::<HashMap<String, String>>())
+        .and_then(
+            /*
+              ensure that the url contains the serverId and deviceId as a query string parameter
+            */
+            |user_agent: String, query_params: HashMap<String, String>| async move {
+                trace_info_ln!("user agent: {}", user_agent);
+
+                // deviceId parameter is now required
+                let server_id = query_params.get("serverId");
+
+                if server_id.is_none() {
+                    trace_err_ln!("invalid args. serverId and deviceId required");
+                    return Err(warp::reject::custom(InvalidArgs));
+                }
+
+                // let mut device_ext = String::from("mobile");
+                // if user_agent.contains("Electron/") {
+                //     device_ext = String::from("desktop")
+                // }
+
+                // if not deviceId arg, assume mobile
+                let device_id = query_params
+                    .get("deviceId")
+                    .unwrap_or(&String::from(format!(
+                        "{}_{}",
+                        server_id.unwrap(),
+                        user_agent
+                    )))
+                    .clone();
+                // // deviceId parameter is now required
+                // let device_id = query_params.get("deviceId");
+
+                // if device_id.is_none() {
+                //     trace_err_ln!("invalid args. serverId and deviceId required");
+                //     return Err(warp::reject::custom(InvalidArgs));
+                // }
+
+                Ok((String::from(server_id.unwrap()), String::from(device_id)))
+            },
+        )
         .and(warp::ws())
         .and(warp::addr::remote())
         .and(get_forwarded_for())
-        .and(warp::query::<HashMap<String, String>>())
         .map(
-            |ws: warp::ws::Ws,
+            |args: (String, String),
+             ws: warp::ws::Ws,
              remote_ip: Option<SocketAddr>,
-             peer_ips: Vec<IpAddr>,
-             query_params: HashMap<String, String>| {
+             peer_ips: Vec<IpAddr>| {
                 let peer_ip = match peer_ips.first() {
                     Some(ip) => ip.to_string(),
                     None => remote_ip.unwrap().ip().to_string(),
                 };
 
-                // Get the query parameter
-                let peer_id = query_params
-                    .get("serverId")
-                    .unwrap_or(&String::from("default_value"))
-                    .clone();
+                trace_info_ln!("hello from websocket");
 
-                ws.on_upgrade(move |socket| handle_signaling(socket, peer_ip, peer_id))
+                ws.on_upgrade(move |socket| handle_signaling(socket, peer_ip, args.0, args.1))
             },
         );
     signaling
 }
 
-pub async fn handle_signaling(ws: WebSocket, peer_ip: PeerIp, peer_id: String) {
+pub async fn handle_signaling(ws: WebSocket, peer_ip: PeerIp, peer_id: String, device_id: String) {
     println!(
         "[signaling] peer {} connected from {}",
         peer_id.clone(),
         peer_ip
     );
+
     let (mut ws_sender, mut ws_receiver) = ws.split();
     let (sender, receiver) = mpsc::unbounded_channel();
     let mut receiver = UnboundedReceiverStream::new(receiver);
 
     let cloned_id = peer_id.clone();
+    let cloned_peer_ip = peer_ip.clone();
+    let cloned_device_id = device_id.clone();
 
     tokio::task::spawn(async move {
         while let Some(message) = receiver.next().await {
@@ -58,7 +106,11 @@ pub async fn handle_signaling(ws: WebSocket, peer_ip: PeerIp, peer_id: String) {
                 .send(message)
                 .unwrap_or_else(|e| {
                     println!("[signaling] websocket send error: {}", e);
-                    disconnect(cloned_id.as_str())
+                    disconnect(
+                        cloned_id.as_str(),
+                        cloned_peer_ip.as_str(),
+                        cloned_device_id.as_str(),
+                    )
                     // TODO HANDLE ANY OTHER CLEANUP
                 })
                 .await;
@@ -74,7 +126,7 @@ pub async fn handle_signaling(ws: WebSocket, peer_ip: PeerIp, peer_id: String) {
             }
         };
         if let Ok(message) = message.to_str() {
-            handle_message(sender.clone(), &peer_ip, &peer_id, message).await;
+            handle_message(sender.clone(), &peer_ip, &peer_id, &device_id, message).await;
         };
     }
 }
@@ -83,15 +135,22 @@ pub async fn handle_message(
     sender: UnboundedSender<Message>,
     peer_ip: &PeerIp,
     peer_id: &PeerId,
+    device_id: &DeviceId,
     message: &str,
 ) {
     let message: Value = serde_json::from_str(message).expect("Error parsing message");
     match message["type"].as_str().unwrap() {
         // Receive peer info from the client
         "create-room" => {
-            println!("{} - create-room - {}", peer_id, peer_ip);
+            print!("{} - create-room - {}", peer_id, peer_ip);
             let rid = message["rid"].as_str().unwrap().to_string();
+            let mut rtype = String::from("media");
+            if !message["rtype"].is_null() {
+                rtype = message["rtype"].as_str().unwrap().to_string();
+            }
+            // let rtype = message["rtype"].as_str().unwrap().to_string();
             let title = message["title"].as_str().unwrap().to_string();
+            println!(". room: '{}'", title);
 
             // path is optional
             let path = match message["path"].as_str() {
@@ -101,6 +160,7 @@ pub async fn handle_message(
 
             let new_room = Room {
                 rid: rid,
+                rtype: rtype,
                 title: title,
                 creator: peer_id.clone(),
                 provider: "default".to_string(),
@@ -136,10 +196,15 @@ pub async fn handle_message(
                 "rooms": rooms_message,
             });
 
+            trace_info_ln!("create-room...");
+            trace_json_ln!(&message);
+
             // send update to all known peers
             let peers = PEER_MAP.read().unwrap();
-            for (_, (_, sender, _)) in peers.iter() {
-                sender.send(Message::text(message.to_string())).unwrap()
+            for (_, value) in peers.iter() {
+                for (_, (_, sender, _)) in value.iter() {
+                    sender.send(Message::text(message.to_string())).unwrap()
+                }
             }
 
             // send self a room-created message
@@ -162,7 +227,10 @@ pub async fn handle_message(
             let rooms = ROOM_MAP.read().unwrap();
             let room = match rooms.get(&rid) {
                 Some(room) => room,
-                None => return,
+                None => {
+                    println!(". room not found {}", rid);
+                    return;
+                }
             };
             let mut room = room.write().unwrap();
             if room.creator != peer_id.clone() {
@@ -190,47 +258,113 @@ pub async fn handle_message(
 
             // send update to all known peers
             let peers = PEER_MAP.read().unwrap();
-            for (_, (_, sender, _)) in peers.iter() {
-                sender.send(Message::text(message.to_string())).unwrap()
+            for (_, value) in peers.iter() {
+                for (_, (_, sender, _)) in value.iter() {
+                    sender.send(Message::text(message.to_string())).unwrap()
+                }
             }
         }
         "delete-room" => {
-            println!("{} - delete-room - {}", peer_id, peer_ip);
+            print!("{} - delete-room - {}", peer_id, peer_ip);
             let rid = message["rid"].as_str().unwrap().to_string();
             let mut rooms = ROOM_MAP.write().unwrap();
-            match rooms.remove(&rid) {
+            let room = match rooms.remove(&rid) {
                 Some(room) => room,
-                None => return,
+                None => {
+                    println!(". room not found {}", rid);
+                    return;
+                }
             };
+
+            let room = room.read().unwrap();
+            println!(". room: '{}'", room.title);
 
             // send update to all known peers
             let peers = PEER_MAP.read().unwrap();
+            // let peer = peers.get(peer_id).unwrap();
+
+            // remove this room (by room type (rtype)) from the peer's room list
+            // clear_room(&room, &peer.2);
+
             let message = json!({
                 "type": "room-deleted",
                 "rid": rid.clone(),
             });
-            for (_, (_, sender, _)) in peers.iter() {
-                sender.send(Message::text(message.to_string())).unwrap()
+
+            for (_, value) in peers.iter() {
+                for (_, (_, sender, _)) in value.iter() {
+                    sender.send(Message::text(message.to_string())).unwrap()
+                }
             }
         }
         "enter-room" => {
-            println!("{} - enter-room - {}", peer_id, peer_ip);
+            print!("{} - enter-room - {}", peer_id, peer_ip);
             let rid = message["rid"].as_str().unwrap().to_string();
 
             // Retrieve the room
             let rooms = ROOM_MAP.read().unwrap();
             let room = match rooms.get(&rid) {
                 Some(room) => room,
-                None => return,
+                None => {
+                    println!(". room not found {}", rid);
+                    return;
+                }
             };
 
             let mut room = room.write().unwrap();
+            println!(". room: '{}'", room.title);
+
+            // enforce the following rules:
+            //  #) user can simultaneously be in an interactive room AND a background room; however...
+            //  #) user can only be in one interactive room at a time
+            //  #) user can only be in one background room at a time
+            // let peers = PEER_MAP.read().unwrap();
+            // let peer = peers.get(peer_id).unwrap();
+
+            // {
+            //     let rooms = peer.2.rooms.read();
+            //     let rooms = rooms.unwrap();
+            //     // if the user is already in an interactive session, do not allow in
+            //     if room.rtype == RoomType::Interactive.as_str() && rooms[0].is_some() {
+            //         println!("{} already in interactive room", peer_id);
+            //         // todo: error handling?
+            //         // let message = json!({
+            //         //     "type": "error",
+            //         //     "rid": rid.clone(),
+            //         //     "peer_id": peer_id.clone(),
+            //         //     "message": "only one active interactive room session per pier allowed",
+            //         // });
+            //         // peer.1.send(Message::text(message.to_string())).unwrap();
+            //         return;
+            //     }
+
+            //     // if the user is already in an interactive session, do not allow in
+            //     if room.rtype == RoomType::Background.as_str() && rooms[1].is_some() {
+            //         println!("{} already in background room", peer_id);
+            //         return;
+            //     }
+            // }
+
             if room.present.contains(peer_id) {
                 println!("{} already in room", peer_id);
                 return;
             }
 
             room.present.push(peer_id.clone());
+
+            // let mut slot: i8 = -1;
+            // // if the user is already in an interactive session, do not allow in
+            // if room.rtype.as_str() == RoomType::Interactive.as_str() {
+            //     slot = 0;
+            // } else if room.rtype.as_str() == RoomType::Background.as_str() {
+            //     slot = 1;
+            // }
+
+            // if slot != -1 {
+            //     let rooms = peer.2.rooms.write();
+            //     let mut rooms = rooms.unwrap();
+            //     rooms[slot as usize].replace(());
+            // }
 
             // Create the message
             let message = json!({
@@ -242,23 +376,35 @@ pub async fn handle_message(
 
             // send update to all known peers
             let peers = PEER_MAP.read().unwrap();
-            for (_, (_, sender, _)) in peers.iter() {
-                sender.send(Message::text(message.to_string())).unwrap()
+            for (_, value) in peers.iter() {
+                for (_, (_, sender, _)) in value.iter() {
+                    sender.send(Message::text(message.to_string())).unwrap()
+                }
             }
         }
         "leave-room" => {
-            println!("{} - leave-room - {}", peer_id, peer_ip);
+            print!("{} - leave-room - {}", peer_id, peer_ip);
             let rid = message["rid"].as_str().unwrap().to_string();
             let rooms = ROOM_MAP.read().unwrap();
             let room = match rooms.get(&rid) {
                 Some(room) => room,
-                None => return,
+                None => {
+                    println!(". room not found {}", rid);
+                    return;
+                }
             };
             let mut room = room.write().unwrap();
+            println!(". room: '{}'", room.title);
             if let Some(index) = room.present.iter().position(|id| id == peer_id) {
                 room.present.remove(index);
             }
+
             let peers = PEER_MAP.read().unwrap();
+            // let peer = peers.get(peer_id).unwrap();
+
+            // remove this room (by room type (rtype)) from the peer's room list
+            // clear_room(&room, &peer.2);
+
             // Create the message
             let message = json!({
                 "type": "room-left",
@@ -268,8 +414,10 @@ pub async fn handle_message(
             });
             // FIX this
             // send update to all known peers
-            for (_, (_, sender, _)) in peers.iter() {
-                sender.send(Message::text(message.to_string())).unwrap()
+            for (_, value) in peers.iter() {
+                for (_, (_, sender, _)) in value.iter() {
+                    sender.send(Message::text(message.to_string())).unwrap()
+                }
             }
             // for peer_id in room.present.iter() {
             //     if let Some((_, sender, _)) = peers.get(peer_id) {
@@ -283,6 +431,10 @@ pub async fn handle_message(
             let from = message["from"].as_str().unwrap().to_string();
             let to = message["to"].as_str().unwrap().to_string();
             let rid = message["rid"].as_str().unwrap().to_string();
+            println!(
+                "{} - signal - {}, {}, {}, {}",
+                peer_id, peer_ip, from, to, rid
+            );
             // check if they are in the same room first
             let rooms = ROOM_MAP.read().unwrap();
             let room = match rooms.get(&rid) {
@@ -300,14 +452,16 @@ pub async fn handle_message(
             let signal = message["signal"].clone();
             println!("signal_type: {}", signal["type"]);
             let peers = PEER_MAP.read().unwrap();
-            if let Some((_, sender, _)) = peers.get(&to) {
+            if let Some(devices) = peers.get(&to) {
                 let message = json!({
                     "type": "signal",
                     "rid": rid.clone(),
                     "from": from,
                     "signal": signal,
                 });
-                sender.send(Message::text(message.to_string())).unwrap();
+                for (_, (_, sender, _)) in devices.iter() {
+                    sender.send(Message::text(message.to_string())).unwrap()
+                }
             }
         }
         "connect" => {
@@ -315,36 +469,69 @@ pub async fn handle_message(
             let rooms = ROOM_MAP.read().unwrap();
             let rooms: Vec<Room> = rooms
                 .iter()
+                // .filter(|&(_k, v)| v.read().unwrap().rtype == "interactive")
                 .map(|(_, room)| room.read().unwrap().clone())
                 .collect();
             let message = json!({
                 "type": "rooms",
                 "rooms": rooms,
             });
+
+            trace_info_ln!("create-room...");
+            trace_json_ln!(&message);
+
             sender.send(Message::text(message.to_string())).unwrap();
 
             let mut peers = PEER_MAP.write().unwrap();
-            peers.insert(
-                peer_id.clone().to_string(),
-                (
-                    peer_ip.clone().to_string(),
-                    sender.clone(),
-                    Peer {
-                        id: peer_id.clone(),
-                    },
-                ),
-            );
+            if let Some(devices) = peers.get_mut(peer_id) {
+                devices.insert(
+                    device_id.to_string(),
+                    (
+                        peer_ip.clone().to_string(),
+                        sender.clone(),
+                        Peer {
+                            id: peer_id.clone(),
+                        },
+                    ),
+                );
+            } else {
+                let mut devices = HashMap::new();
+                devices.insert(
+                    device_id.to_string(),
+                    (
+                        peer_ip.clone().to_string(),
+                        sender.clone(),
+                        Peer {
+                            id: peer_id.clone(),
+                        },
+                    ),
+                );
+                peers.insert(peer_id.clone().to_string(), devices);
+            }
         }
-        "disconnect" => disconnect(peer_id),
+        "disconnect" => disconnect(peer_id, peer_ip, device_id),
         _ => unknown(),
     };
 }
+
+// fn clear_room(room: &Room, peer: &Peer) {
+//     let rooms = peer.rooms.write();
+//     let mut rooms = rooms.unwrap();
+//     // clear this peer's interactive session
+//     if room.rtype == RoomType::Interactive.as_str() && rooms[0].is_some() {
+//         rooms[0] = None;
+//     }
+//     // clear this peer's backgorund session
+//     if room.rtype == RoomType::Background.as_str() && rooms[1].is_some() {
+//         rooms[1] = None;
+//     }
+// }
 
 fn unknown() {
     println!("[signaling] unknown message type")
 }
 
-fn disconnect(peer_id: &str) {
+fn disconnect(peer_id: &str, _peer_ip: &str, device_id: &str) {
     println!("{} - disconnect", peer_id);
     let mut room_ids_to_remove = Vec::new();
 
@@ -373,14 +560,24 @@ fn disconnect(peer_id: &str) {
                 "type": "room-deleted",
                 "rid": rid.clone(),
             });
-            for (_, (_, sender, _)) in peers.iter() {
-                sender.send(Message::text(message.to_string())).unwrap()
+            for (_, value) in peers.iter() {
+                for (_, (_, sender, _)) in value.iter() {
+                    sender.send(Message::text(message.to_string())).unwrap()
+                }
             }
         }
     }
 
     let mut peers = PEER_MAP.write().unwrap();
-    peers.remove(peer_id);
+    if let Some(devices) = peers.get_mut(peer_id) {
+        devices.retain(|key, _value| key != device_id);
+    }
+    // peers.remove(peer_id);
     // print current peer ids
     println!("Current peers: {:?}", peers.keys());
+    for (key, value) in peers.iter() {
+        for (device_key, (device_id, _sender, _)) in value.iter() {
+            println!("[{}, {}, {}]", key, device_id, device_key);
+        }
+    }
 }
