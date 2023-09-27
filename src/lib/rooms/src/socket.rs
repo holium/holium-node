@@ -218,7 +218,18 @@ pub async fn handle_message(
                 "type": "room-created",
                 "room": room.clone(),
             });
-            sender.send(Message::text(message.to_string())).unwrap();
+
+            // @patrick
+            //  this is a change based on a request for mobile support. originally
+            //  we only sent out the room-created event to the creator of the room
+            //  with this change; however, we are going to send the room-created event
+            //  to ALL known peers
+            let peers = PEER_MAP.read().unwrap();
+            for (_, value) in peers.iter() {
+                for (_, (_, sender, _)) in value.iter() {
+                    sender.send(Message::text(message.to_string())).unwrap()
+                }
+            }
         }
 
         "edit-room" => {
