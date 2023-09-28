@@ -9,7 +9,8 @@ use tokio::sync::mpsc::UnboundedSender;
 use warp::ws::Message;
 
 pub type PeerId = String;
-pub type DeviceId = String;
+// pub type DeviceId = String;
+pub type SessionId = String;
 pub type PeerIp = String;
 pub type Rid = String;
 
@@ -34,6 +35,16 @@ impl RoomType {
             RoomType::Interactive => "interactive",
         }
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Session {
+    pub id: SessionId,
+    pub network_id: String,
+    pub device_id: String,
+    pub peer_ip: String,
+
+    // pub rooms: Arc<RwLock<[Option<()>; 2]>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,7 +80,7 @@ lazy_static! {
     //   electron clients (running on the same device) to have the same IP address.
     // we can either force devs to come up with a truly unique device ID (will be difficult to be 100% fool proof
     //   for electron clients), or simply allow the same IP to connect multiple times (if needed)
-    pub static ref PEER_MAP: RwLock<HashMap<PeerId, HashMap<DeviceId, DeviceInfo>>> = RwLock::new(HashMap::new());
+    pub static ref SESSION_MAP: RwLock<HashMap<SessionId, Session>> = RwLock::new(HashMap::new());
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
