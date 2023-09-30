@@ -19,7 +19,8 @@ pub type Rid = String;
 // in one 'interactive' and/or one 'background' session at a time
 // slot 0 is reserved for the current 'interactive' session (if exists)
 // slot 1 is reserved for the current 'background' session (if exists)
-pub type DeviceInfo = (PeerIp, UnboundedSender<Message>, Peer);
+// pub type DeviceInfo = (PeerIp, UnboundedSender<Message>, Peer);
+pub type SocketSession = (Session, UnboundedSender<Message>);
 // pub type Peers = HashMap<PeerId, PeerInfo>;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -39,11 +40,14 @@ impl RoomType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
+    #[serde(rename = "session_id")]
     pub id: SessionId,
-    pub network_id: String,
-    pub device_id: String,
+    // pub network_id: String,
+    // pub device_id: String,
+    #[serde(skip_deserializing)]
+    pub peer_id: String,
+    #[serde(skip_deserializing)]
     pub peer_ip: String,
-
     // pub rooms: Arc<RwLock<[Option<()>; 2]>>,
 }
 
@@ -61,12 +65,17 @@ pub struct Room {
     pub rtype: String,
     pub title: String,
     pub creator: String,
+    // origin - session that created room
+    #[serde(skip)]
+    pub origin: String,
     pub provider: String,
     pub access: String,
     pub present: Vec<String>,
     pub whitelist: Vec<String>,
     pub capacity: u32,
     pub path: Option<String>,
+    #[serde(skip)]
+    pub sessions: HashMap<String, Session>,
 }
 pub type RoomLock = Arc<RwLock<Room>>;
 
@@ -80,7 +89,7 @@ lazy_static! {
     //   electron clients (running on the same device) to have the same IP address.
     // we can either force devs to come up with a truly unique device ID (will be difficult to be 100% fool proof
     //   for electron clients), or simply allow the same IP to connect multiple times (if needed)
-    pub static ref SESSION_MAP: RwLock<HashMap<SessionId, Session>> = RwLock::new(HashMap::new());
+    pub static ref SESSION_MAP: RwLock<HashMap<SessionId, SocketSession>> = RwLock::new(HashMap::new());
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

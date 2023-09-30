@@ -1,7 +1,7 @@
-use serde_json::{json, Value as JsonValue};
+// use serde_json::{json, Value as JsonValue};
 use warp::Filter;
 
-use crate::types::{Room, PEER_MAP, ROOM_MAP};
+use crate::types::{Room, Session, ROOM_MAP, SESSION_MAP};
 
 pub fn rooms_route() -> impl Filter<Extract = (impl warp::Reply,), Error = warp::Rejection> + Clone
 {
@@ -19,7 +19,7 @@ pub fn rooms_route() -> impl Filter<Extract = (impl warp::Reply,), Error = warp:
         )
         .and_then(|arg: Option<String>| async { handle_get_session(arg).await });
 
-    let get_peers = warp::path!("hol" / "peers" / ..)
+    let get_peers = warp::path!("hol" / "sessions" / ..)
         .and(warp::get())
         .and(
             warp::path::param::<String>()
@@ -56,16 +56,11 @@ pub async fn handle_get_session(arg: Option<String>) -> Result<impl warp::Reply,
 pub async fn handle_get_peers(arg: Option<String>) -> Result<impl warp::Reply, warp::Rejection> {
     let _arg = arg.as_ref();
 
-    let peers = PEER_MAP.read().unwrap();
-    let mut result: Vec<JsonValue> = Vec::new();
-    for (key, value) in peers.iter() {
-        for (device_key, (device_id, _sender, _)) in value.iter() {
-            result.push(json!({
-              "peer_id": key,
-              "device_ip": device_id,
-              "device_id": device_key
-            }));
-        }
+    let mut result: Vec<Session> = Vec::new();
+    // send update to all known peers
+    let sessions = SESSION_MAP.read().unwrap();
+    for (_, value) in sessions.iter() {
+        result.push(value.0.clone());
     }
 
     Ok(warp::reply::json(&result))
