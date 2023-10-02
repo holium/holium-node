@@ -215,10 +215,11 @@ pub async fn handle_message(
             //  with this change; however, we are going to send the room-created event
             //  to ALL known peers
             // send update to all known peers
-            let sessions = SESSION_MAP.read().unwrap();
-            for (_, value) in sessions.iter() {
-                value.1.send(Message::text(message.to_string())).unwrap()
-            }
+            // let sessions = SESSION_MAP.read().unwrap();
+            // for (_, value) in sessions.iter() {
+            //     value.1.send(Message::text(message.to_string())).unwrap()
+            // }
+            sender.send(Message::text(message.to_string())).unwrap()
         }
 
         "edit-room" => {
@@ -289,6 +290,12 @@ pub async fn handle_message(
                 return;
             }
 
+            room.sessions.insert(session_id.to_string(), Session {
+              id: session_id.to_string(),
+              peer_id: peer_id.to_string(),
+              peer_ip: peer_ip.to_string()
+            });
+
             if !room.present.contains(peer_id) {
                 room.present.push(peer_id.clone());
             }
@@ -321,10 +328,6 @@ pub async fn handle_message(
             let mut room = room.write().unwrap();
             println!(". room: '{}'", room.title);
 
-            if room.sessions.contains_key(session_id) {
-                room.sessions.remove(session_id);
-            }
-
             if !room
                 .sessions
                 .iter()
@@ -347,6 +350,13 @@ pub async fn handle_message(
                 delete_room(session_id, &rid);
                 return;
             }
+
+            if room.sessions.contains_key(session_id) {
+              room.sessions.remove(session_id);
+              let mut sessions = SESSION_MAP.write().unwrap();
+              sessions.remove(session_id);
+              drop(sessions);
+          }
 
             // Create the message
             let message = json!({
@@ -450,7 +460,7 @@ fn unknown() {
     trace_warn_ln!("unknown message type")
 }
 
-fn delete_room(session_id: &str, room_id: &str) {
+fn delete_room(_session_id: &str, room_id: &str) {
     let mut rooms = ROOM_MAP.write().unwrap();
     let room = match rooms.remove(room_id) {
         Some(room) => room,
@@ -462,6 +472,13 @@ fn delete_room(session_id: &str, room_id: &str) {
 
     let room = room.read().unwrap();
     println!(". room: '{}'", room.title);
+
+    let mut sessions = SESSION_MAP.write().unwrap();
+    for (sid, _) in room.sessions.iter() {
+      trace_warn_ln!("removing session {}...", sid);
+      sessions.remove(sid);
+    }
+    drop(sessions);
 
     let message = json!({
         "type": "room-deleted",
@@ -478,6 +495,7 @@ fn delete_room(session_id: &str, room_id: &str) {
 fn disconnect(session_id: &str, peer_id: &str, peer_ip: &str) {
     println!("disconnect: [{}, {}, {}]", session_id, peer_id, peer_ip);
     let mut room_ids_to_remove = Vec::new();
+    let mut session_ids_to_remove = Vec::new();
 
     {
         let rooms = ROOM_MAP.read().unwrap();
@@ -486,28 +504,33 @@ fn disconnect(session_id: &str, peer_id: &str, peer_ip: &str) {
             if let Some(index) = room
                 .sessions
                 .iter()
-                .position(|(sid, session)| sid == session_id)
+                .position(|(sid, _session)| sid == session_id)
             {
                 room.present.remove(index);
             }
             // if the peer was the last one in the room or the owner of the room, mark the room for removal
             if room.present.is_empty() || &room.origin == session_id {
                 room_ids_to_remove.push(rid.clone());
+                // queue up all sessions in this room. they will need to be removed
+                for (sid, _) in room.sessions.iter() {
+                  session_ids_to_remove.push(sid.clone());
+                }
             }
         }
     }
 
-    println!("deleting these rooms: {:?}", room_ids_to_remove);
-
+    // for each room that is being deleted, remove all the associated connections/sessions
     {
-        let mut sessions = SESSION_MAP.write().unwrap();
-        sessions.remove(session_id);
+      let mut sessions = SESSION_MAP.write().unwrap();
+      for sid in session_ids_to_remove {
+        sessions.remove(&sid);
+      }
 
-        // print current peer ids
-        println!("Current peers: {:?}", sessions.keys());
-        for (_, value) in sessions.iter() {
-            println!("[{}, {}, {}]", value.0.id, value.0.peer_id, value.0.peer_ip);
-        }
+      // print current peer ids
+      println!("Current peers: {:?}", sessions.keys());
+      for (_, value) in sessions.iter() {
+          println!("[{}, {}, {}]", value.0.id, value.0.peer_id, value.0.peer_ip);
+      }
     }
 
     // Remove rooms in a separate pass to avoid the mutable borrow issue

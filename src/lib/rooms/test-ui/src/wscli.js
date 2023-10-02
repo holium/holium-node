@@ -4,6 +4,96 @@ import { useObserver } from 'mobx-react-lite';
 const ws = 'ws://';
 const nodeUrl = '127.0.0.1:3030';
 
+let creatorWs = null;
+
+const randomNumberInRange = (min, max) => {
+  return Math.floor(Math.random() * (max - min + 1) + min);
+};
+
+const stopTests = () => {
+  creatorWs.send(
+    JSON.stringify({
+      type: 'leave-room',
+      rid: '~lodlev-migdev/test-room',
+    })
+  );
+};
+const runTests = () => {
+  const serverIds = [
+    '~lodlev-migdev',
+    '~ralbes-mislec-lodlev-migdev',
+    '~hobpec-sopped-lodlev-migdev',
+    '~locwyd-mocrut-lodlev-migdev',
+  ];
+
+  const creatorUrl = `wss://node-test.holium.live/signaling?serverId=${serverIds[0]}`;
+  console.log(`connecting to websocket ${creatorUrl}...`);
+  creatorWs = new WebSocket(creatorUrl);
+  creatorWs.onopen = (ev) => {
+    console.log('websocket opened');
+    creatorWs.send(JSON.stringify({ type: 'connect' }));
+  };
+  creatorWs.onerror = (ev) => {
+    console.error('websocket error => %o', ev);
+  };
+  creatorWs.onclose = (ev) => {
+    console.warn('websocket closed');
+  };
+  creatorWs.onmessage = (ev) => {
+    console.log('websocket message');
+    console.log(ev.data);
+    const data = JSON.parse(ev.data);
+    switch (data.type) {
+      case 'connected':
+        creatorWs.send(
+          JSON.stringify({
+            type: 'create-room',
+            rtype: 'media',
+            rid: '~lodlev-migdev/test-room',
+            title: 'Test Room',
+            path: '~lodlev-migdev/test-room',
+          })
+        );
+        break;
+
+      case 'room-created':
+        for (let i = 0; i < 20; i++) {
+          const r1 = randomNumberInRange(0, 3);
+          const url = `wss://node-test.holium.live/signaling?serverId=${serverIds[r1]}`;
+          console.log(`connecting to websocket ${url}...`);
+          const ws = new WebSocket(url);
+          ws.onopen = (ev) => {
+            console.log('websocket opened');
+            ws.send(JSON.stringify({ type: 'connect' }));
+          };
+          ws.onerror = (ev) => {
+            console.error('websocket error => %o', ev);
+          };
+          ws.onclose = (ev) => {
+            console.warn('websocket closed');
+          };
+          ws.onmessage = (ev) => {
+            console.log('websocket message');
+            console.log(ev.data);
+            const data = JSON.parse(ev.data);
+            switch (data.type) {
+              case 'connected': {
+                ws.send(
+                  JSON.stringify({
+                    type: 'enter-room',
+                    rid: '~lodlev-migdev/test-room',
+                  })
+                );
+                break;
+              }
+            }
+          };
+        }
+        break;
+    }
+  };
+};
+
 export default function WebSocketClient() {
   const [url, setUrl] = useState('');
   const [status, setStatus] = useState('disconnected');
@@ -155,6 +245,8 @@ export default function WebSocketClient() {
           }}
         />
         <button onClick={() => sendPayload()}>Send payload</button>
+        <button onClick={() => runTests()}>Run Tests</button>
+        <button onClick={() => stopTests()}>Stop Tests</button>
       </div>
     </div>
   ));
