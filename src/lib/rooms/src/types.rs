@@ -2,6 +2,7 @@ use lazy_static::lazy_static;
 use std::{
     collections::{HashMap, VecDeque},
     sync::{Arc, RwLock},
+    time::SystemTime,
 };
 
 use serde::{Deserialize, Serialize};
@@ -34,6 +35,8 @@ pub struct Room {
     pub whitelist: Vec<String>,
     pub capacity: u32,
     pub path: Option<String>,
+    pub created_at: SystemTime,
+    pub updated_at: SystemTime,
 }
 pub type RoomLock = Arc<RwLock<Room>>;
 

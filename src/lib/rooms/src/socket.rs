@@ -1,5 +1,6 @@
 use futures_util::{SinkExt, StreamExt, TryFutureExt};
 use serde_json::{json, Value};
+use std::time::SystemTime;
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::sync::{Arc, RwLock};
@@ -100,15 +101,17 @@ pub async fn handle_message(
             };
 
             let new_room = Room {
-                rid: rid,
-                title: title,
+                rid,
+                title,
                 creator: peer_id.clone(),
                 provider: "default".to_string(),
                 access: "public".to_string(),
                 present: vec![peer_id.clone()],
                 whitelist: Vec::new(),
                 capacity: 10,
-                path: path,
+                path,
+                created_at: SystemTime::now(),
+                updated_at: SystemTime::now(),
             };
             let rid = new_room.rid.clone();
 
@@ -180,6 +183,7 @@ pub async fn handle_message(
                 Some(capacity) => room.capacity = capacity as u32,
                 None => (),
             };
+            room.updated_at = SystemTime::now();
 
             let message = json!({
                 "type": "edit-room",
@@ -231,6 +235,7 @@ pub async fn handle_message(
             }
 
             room.present.push(peer_id.clone());
+            room.updated_at = SystemTime::now();
 
             // Create the message
             let message = json!({
@@ -258,6 +263,7 @@ pub async fn handle_message(
             if let Some(index) = room.present.iter().position(|id| id == peer_id) {
                 room.present.remove(index);
             }
+            room.updated_at = SystemTime::now();
             let peers = PEER_MAP.read().unwrap();
             // Create the message
             let message = json!({
