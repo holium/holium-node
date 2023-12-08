@@ -3,17 +3,16 @@ import { patp2dec } from '@urbit/aura';
 import { toJS } from 'mobx';
 import logo from './logo.svg';
 import './App.css';
-import Peer from 'simple-peer'
+import Peer from 'simple-peer';
 import { useObserver } from 'mobx-react-lite';
 import PeerStore from './PeerStore';
 
-const enableTrickle = true
+const enableTrickle = true;
 
-const ws = 'wss://'
-const tls = 'https://'
-const nodeUrl = 'node-0.holium.live'
-// const nodeUrl = 'http://localhost:3030' 
-
+const ws = 'wss://';
+const tls = 'https://';
+const nodeUrl = 'node-0.holium.live';
+// const nodeUrl = 'http://localhost:3030'
 
 function App() {
   // get query param ?serverId=xxx&path=xxx
@@ -26,7 +25,7 @@ function App() {
   const [currentRoom, setCurrentRoom] = useState(null);
   const [stream, setStream] = useState(null);
   const [mediaErr, setMediaErr] = useState(null);
-  const [username, setUsername] = useState(serverId); 
+  const [username, setUsername] = useState(serverId);
   const [payload, setPayload] = useState(`
     {
       "type": "create-room"
@@ -43,14 +42,16 @@ function App() {
   const roomsRef = useRef(rooms);
   const streamRef = useRef();
 
-
   useEffect(() => {
     const getMedia = async () => {
       if (!videoRef.current) return;
       try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        const mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false,
+        });
         // const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        if(videoRef.current) {
+        if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
           setStream(mediaStream);
           streamRef.current = mediaStream;
@@ -58,25 +59,28 @@ function App() {
       } catch (err) {
         console.error('Could not get user media:', err);
       }
-    }
+    };
 
     if (username) {
       connect();
     }
-    
-    fetch(`${tls}${nodeUrl}/hol/rooms`).then(res => res.json()).then(res => {
-      setRoomsState(res);
-    }).catch(err => {
-      console.error('Could not get rooms:', err);
-    });
+
+    fetch(`${tls}${nodeUrl}/hol/rooms`)
+      .then((res) => res.json())
+      .then((res) => {
+        setRoomsState(res);
+      })
+      .catch((err) => {
+        console.error('Could not get rooms:', err);
+      });
 
     getMedia();
   }, []);
 
   useEffect(() => {
     if (stream && videoRef.current && !videoRef.current.srcObject) {
-      console.log('set video stream', videoRef.current, stream)
-      videoRef.current.srcObject = stream
+      console.log('set video stream', videoRef.current, stream);
+      videoRef.current.srcObject = stream;
     }
     if (peersRef.current.size > 0) {
       attachPeerVideos();
@@ -84,60 +88,65 @@ function App() {
   }, [stream]);
 
   const attachPeerVideos = () => {
-    Object.entries(peersRef.current).forEach(entry => {
-      const [peerId, peer] = entry
+    Object.entries(peersRef.current).forEach((entry) => {
+      const [peerId, peer] = entry;
       if (peer.video && !peer.video.srcObject && peer.stream) {
-        console.log('setting peer video stream', peerId, peer.stream)
-        peer.video.setAttribute('data-peer-id', peerId)
-        peer.video.srcObject = peer.stream
+        console.log('setting peer video stream', peerId, peer.stream);
+        peer.video.setAttribute('data-peer-id', peerId);
+        peer.video.srcObject = peer.stream;
       }
-    })
+    });
     // setPeers(newPeers);
-  }
+  };
 
   const getMedia = (callback, err) => {
-    const options = { video: true, audio: true }
+    const options = { video: true, audio: true };
     if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-      return navigator.mediaDevices.getUserMedia(options)
-        .then(stream => callback(stream))
-        .catch(e => err(e))
+      return navigator.mediaDevices
+        .getUserMedia(options)
+        .then((stream) => callback(stream))
+        .catch((e) => err(e));
     }
-    return navigator.getUserMedia(options, callback,  err)
-  }
+    return navigator.getUserMedia(options, callback, err);
+  };
 
   const renderPeers = () => {
-    return Object.entries(peersRef.current).map(entry => {
-      const [peerId, peer] = entry
-      console.log('render peer', peerId, peer, entry)
-      return <div key={peerId}>
-        <video ref={video => peer.video = video}></video>
-      </div>
-    })
-  }
+    return Object.entries(peersRef.current).map((entry) => {
+      const [peerId, peer] = entry;
+      console.log('render peer', peerId, peer, entry);
+      return (
+        <div key={peerId}>
+          <video ref={(video) => (peer.video = video)}></video>
+        </div>
+      );
+    });
+  };
 
   const serialize = (data) => {
-    return JSON.stringify(data)
-  }
+    return JSON.stringify(data);
+  };
 
   const unserialize = (data) => {
     try {
-      return JSON.parse(data.toString())
-    } catch(e) {
-      return undefined
+      return JSON.parse(data.toString());
+    } catch (e) {
+      return undefined;
     }
-  }
+  };
 
   const setPeerState = (peerId, peer) => {
     PeerStore.setPeer(peerId, peer);
-  }
+  };
 
   const setRoomsState = (rooms) => {
     roomsRef.current = rooms;
     setRooms(rooms);
-  }
- 
+  };
+
   const connect = () => {
-    socketRef.current = new WebSocket(`${ws}${nodeUrl}/signaling?serverId=${username}`);
+    socketRef.current = new WebSocket(
+      `${ws}${nodeUrl}/signaling?serverId=${username}`
+    );
 
     socketRef.current.onopen = function open() {
       setStatus('connected');
@@ -152,7 +161,7 @@ function App() {
     socketRef.current.onclose = function close() {
       console.log('disconnected');
       setStatus('disconnected');
-        // setTimeout(connect, 5000); // Try to reconnect after 5 seconds
+      // setTimeout(connect, 5000); // Try to reconnect after 5 seconds
     };
 
     socketRef.current.onerror = function error(err) {
@@ -163,7 +172,7 @@ function App() {
     // on sigkill close the connection
     window.onbeforeunload = function () {
       disconnect();
-    }
+    };
   };
 
   const disconnect = () => {
@@ -191,7 +200,14 @@ function App() {
   };
 
   const createRoom = (roomName) => {
-    socketRef.current.send(serialize({ type: 'create-room', rid: `${username}/${roomName}`, title: roomName, path: '/~lomder-librun/realm-forerunners' }));
+    socketRef.current.send(
+      serialize({
+        type: 'create-room',
+        rid: `${username}/${roomName}`,
+        title: roomName,
+        path: '/~lomder-librun/realm-forerunners',
+      })
+    );
   };
 
   const deleteRoom = (rid) => {
@@ -203,18 +219,22 @@ function App() {
     // remove self from room present list
     const updatedRoom = rooms.find((room) => room.rid === rid);
     if (updatedRoom) {
-      updatedRoom.present = updatedRoom.present.filter((user) => user !== username);
+      updatedRoom.present = updatedRoom.present.filter(
+        (user) => user !== username
+      );
     }
     setCurrentRoom(undefined);
-    setRoomsState(rooms.map((room) => room.rid === rid ? updatedRoom : room));
+    setRoomsState(rooms.map((room) => (room.rid === rid ? updatedRoom : room)));
   };
 
-
   const createPeer = (peerId, initiator, stream) => {
-    console.log('createPeer', peerId, initiator, stream)
+    console.log('createPeer', peerId, initiator, stream);
 
     const peer = new Peer({
-      initiator: initiator, trickle: enableTrickle, stream, config: {
+      initiator: initiator,
+      trickle: enableTrickle,
+      stream,
+      config: {
         iceServers: [
           {
             username: 'realm',
@@ -225,61 +245,67 @@ function App() {
             urls: ['stun:coturn.holium.live:3478'],
           },
         ],
-    
-      }
+      },
     });
 
     peer.on('signal', (signal) => {
-      const msg = { type: "signal", rid: currentRoomRef.current.rid, signal, to: peerId, from: username }
-      socketRef.current.send(serialize(msg))
-    })
-  
+      const msg = {
+        type: 'signal',
+        rid: currentRoomRef.current.rid,
+        signal,
+        to: peerId,
+        from: username,
+      };
+      socketRef.current.send(serialize(msg));
+    });
+
     peer.on('stream', (stream) => {
-      console.log('Got peer stream!!!', peerId, stream)
-      peer.addStream(stream)
-      document.getElementById(`peer-video-${peerId}`).srcObject = stream
-      setPeerState(peerId, peer)
-    })
+      console.log('Got peer stream!!!', peerId, stream);
+      peer.addStream(stream);
+      document.getElementById(`peer-video-${peerId}`).srcObject = stream;
+      setPeerState(peerId, peer);
+    });
 
     peer.on('connect', () => {
-      console.log('Connected to peer', peerId)
-      setPeerState(peerId, peer)
-      peer.send(serialize({
-        type: 'peer-message',
-        msg: 'hey man!'
-      }))
-    })
+      console.log('Connected to peer', peerId);
+      setPeerState(peerId, peer);
+      peer.send(
+        serialize({
+          type: 'peer-message',
+          msg: 'hey man!',
+        })
+      );
+    });
 
-    peer.on('data', data => {
-      console.log('Data from peer', peerId, unserialize(data))
-    })
+    peer.on('data', (data) => {
+      console.log('Data from peer', peerId, unserialize(data));
+    });
 
     peer.on('error', (e) => {
       console.log('Peer error %s:', peerId, e);
-    })
+    });
 
-    setPeerState(peerId, peer)
+    setPeerState(peerId, peer);
 
-    return peer
-  }
+    return peer;
+  };
 
   const destroyPeer = (peerId) => {
     PeerStore.deletePeer(peerId);
-  }
+  };
 
-   const onPeerSignal = (from, data) => {
-     try {
+  const onPeerSignal = (from, data) => {
+    try {
       const peer = peersRef.current[from];
-      peer.signal(data)
-    } catch(e) {
-      console.error('sigal error', e)
+      peer.signal(data);
+    } catch (e) {
+      console.error('sigal error', e);
     }
-  }
-
+  };
 
   const responseParser = (response) => {
     switch (response.type) {
-      case 'rooms': 
+      case 'rooms':
         setRoomsState(response.rooms);
         break;
       case 'room-created':
@@ -301,7 +327,7 @@ function App() {
             peersRef.current[peerId] = peer;
           }
         });
-        
+
         break;
       case 'room-left':
         // replace room in rooms array with response.room
@@ -315,11 +341,19 @@ function App() {
             // someone left the room
             console.log('someone left the room', response);
             destroyPeer(response.peer_id);
-            const updatedRoom = roomsRef.current.find((room) => room.rid === response.rid);
+            const updatedRoom = roomsRef.current.find(
+              (room) => room.rid === response.rid
+            );
             if (updatedRoom) {
-              updatedRoom.present = updatedRoom.present.filter((user) => user !== username);
+              updatedRoom.present = updatedRoom.present.filter(
+                (user) => user !== username
+              );
             }
-            setRoomsState(roomsRef.current.map((room) => room.rid === response.rid ? updatedRoom : room));
+            setRoomsState(
+              roomsRef.current.map((room) =>
+                room.rid === response.rid ? updatedRoom : room
+              )
+            );
             currentRoomLeft.current = updatedRoom;
             setCurrentRoom(updatedRoom);
           }
@@ -331,136 +365,206 @@ function App() {
         const currentRoomDeleted = currentRoomRef.current;
         if (currentRoomDeleted.rid === removeRid) {
           currentRoomDeleted.present.forEach((peerId) => {
-            if(peerId !== username) destroyPeer(peerId);
+            if (peerId !== username) destroyPeer(peerId);
           });
           setCurrentRoom(undefined);
           currentRoomDeleted.current = undefined;
-
         }
         break;
       case 'signal':
         const { signal, from } = response;
         const isInitiator = isInitiatorCheck(username, from);
 
-        if (currentRoomRef.current && currentRoomRef.current.present.includes(from)) {
-          const peer = peersRef.current[from] || createPeer(from, isInitiator, streamRef.current);
-          setPeerState(from, peer)
-          onPeerSignal(from, signal)
+        if (
+          currentRoomRef.current &&
+          currentRoomRef.current.present.includes(from)
+        ) {
+          const peer =
+            peersRef.current[from] ||
+            createPeer(from, isInitiator, streamRef.current);
+          setPeerState(from, peer);
+          onPeerSignal(from, signal);
         }
         break;
     }
   };
-
 
   const sendPayload = () => {
     try {
       let parsedPayload = unserialize(payload);
       socketRef.current.send(serialize(parsedPayload));
     } catch (e) {
-      console.log('invalid json', e)
+      console.log('invalid json', e);
     }
   };
 
   return useObserver(() => (
-    <div className="App">
+    <div className='App'>
       <header>
         <h2>Holium node - rooms test ui</h2>
-        <div style={{display: 'flex', flexDirection: 'row', gap: 8, justifyContent: 'center'}}>
-        <input
-          type="text"
-          placeholder="Enter patp"
-          value={username}
-          onChange={(evt) => {
-            evt.stopPropagation()
-            setUsername(evt.target.value);
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            gap: 8,
+            justifyContent: 'center',
           }}
+        >
+          <input
+            type='text'
+            placeholder='Enter patp'
+            value={username}
+            onChange={(evt) => {
+              evt.stopPropagation();
+              setUsername(evt.target.value);
+            }}
           />
-
         </div>
-        <div style={{marginTop: 8, marginBottom: 8}}>Holium node: {status}</div>
-        <div style={{ display: 'flex', flexDirection: 'row', gap: 8, justifyContent: 'center' }}>
-          <button disabled={status === 'connected'} onClick={() => connect()}>Connect</button>
-          <button  disabled={status === 'disconnected'} onClick={() => disconnect()}>Disconnect</button>
+        <div style={{ marginTop: 8, marginBottom: 8 }}>
+          Holium node: {status}
         </div>
-          
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'row',
+            gap: 8,
+            justifyContent: 'center',
+          }}
+        >
+          <button disabled={status === 'connected'} onClick={() => connect()}>
+            Connect
+          </button>
+          <button
+            disabled={status === 'disconnected'}
+            onClick={() => disconnect()}
+          >
+            Disconnect
+          </button>
+        </div>
       </header>
-      <div style={{display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center'}}>
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 8,
+          alignItems: 'center',
+        }}
+      >
         <textarea
-          style={{marginTop: 16}}
-          type="text"
+          style={{ marginTop: 16 }}
+          type='text'
           cols={50}
           rows={10}
-          placeholder="Enter message payload"
+          placeholder='Enter message payload'
           value={payload}
           onChange={(evt) => {
             evt.stopPropagation();
             // text area value
             setPayload(evt.target.value);
-            
           }}
         />
         <button onClick={() => sendPayload()}>Send payload</button>
-        </div>
-      {mediaErr && (
-        <p className="error">{mediaErr}</p>
-      )}
-      
-      <div style={{ display: 'flex', flexDirection: 'row', width: 900, marginTop: 30 }}>
+      </div>
+      {mediaErr && <p className='error'>{mediaErr}</p>}
+
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'row',
+          width: 900,
+          marginTop: 30,
+        }}
+      >
         <div className='rooms-list'>
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 8, padding: '8px 8px' }}>
+          <div
+            style={{
+              display: 'flex',
+              flexDirection: 'row',
+              gap: 8,
+              padding: '8px 8px',
+            }}
+          >
             <input
-              type="text"
-              placeholder="Enter room name"
+              type='text'
+              placeholder='Enter room name'
               value={roomName}
               onChange={(evt) => {
-                evt.stopPropagation()
+                evt.stopPropagation();
                 setRoomName(evt.target.value);
               }}
             />
-          <button onClick={() => createRoom(roomName)}>Create</button>
-          {/* <button onClick={() => deleteRoom()}>Delete room</button> */}
-        </div>
-          <div style={{ display: 'flex', flexDirection: 'column'}}>
+            <button onClick={() => createRoom(roomName)}>Create</button>
+            {/* <button onClick={() => deleteRoom()}>Delete room</button> */}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             {rooms.map((room) => {
               return (
-                <div key={room} className="room-row">
+                <div key={room} className='room-row'>
                   <span>{room.rid}</span>
                   {!isInRoom(room.rid) ? (
-                    <button onClick={() => {
-                      socketRef.current.send(serialize({ type: 'enter-room', rid: room.rid }));
-                    }}>Enter</button>
+                    <button
+                      onClick={() => {
+                        socketRef.current.send(
+                          serialize({ type: 'enter-room', rid: room.rid })
+                        );
+                      }}
+                    >
+                      Enter
+                    </button>
+                  ) : isCreator(room.rid) ? (
+                    <button onClick={() => deleteRoom(room.rid)}>Delete</button>
                   ) : (
-                      isCreator(room.rid) ? (
-                        <button onClick={() => deleteRoom(room.rid)}>Delete</button>
-                      ) : (
-                        <button onClick={() => leaveRoom(room.rid)}>Leave</button>
-                      )
+                    <button onClick={() => leaveRoom(room.rid)}>Leave</button>
                   )}
                 </div>
-              )
+              );
             })}
           </div>
         </div>
-        <div id="our-video">
-          <video style={{width: 400}} ref={videoRef} autoPlay playsInline muted />
+        <div id='our-video'>
+          <video
+            style={{ width: 400 }}
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted
+          />
         </div>
-        <div className="peers">{currentRoom && currentRoom.present.map((peer) => {
-          let callbutton = null;
-          let video = null;
-          if (peer !== username) {
-            {/* callbutton = <button disabled={PeerStore.peers[peer] && PeerStore.peers[peer].connected} onClick={() => createPeer(peer, isInitiatorCheck(username, peer), stream)}>Call</button>             */}
-            video = <video id={`peer-video-${peer}`} style={{width: 200}} autoPlay playsInline />
-          }
-          return (
-            <div className="peer-row" key={peer}>
-              <div style={{ display: 'flex', flexDirection: 'row', justifyContent: 'space-between' }}>
-                {peer}
-                {/* {callbutton} */}
-              </div>
-              {video}
-            </div>
-          )
-        })}</div>
+        <div className='peers'>
+          {currentRoom &&
+            currentRoom.present.map((peer) => {
+              let callbutton = null;
+              let video = null;
+              if (peer !== username) {
+                {
+                  /* callbutton = <button disabled={PeerStore.peers[peer] && PeerStore.peers[peer].connected} onClick={() => createPeer(peer, isInitiatorCheck(username, peer), stream)}>Call</button>             */
+                }
+                video = (
+                  <video
+                    id={`peer-video-${peer}`}
+                    style={{ width: 200 }}
+                    autoPlay
+                    playsInline
+                  />
+                );
+              }
+              return (
+                <div className='peer-row' key={peer}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      justifyContent: 'space-between',
+                    }}
+                  >
+                    {peer}
+                    {/* {callbutton} */}
+                  </div>
+                  {video}
+                </div>
+              );
+            })}
+        </div>
       </div>
     </div>
   ));
